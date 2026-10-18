@@ -225,8 +225,10 @@ async function actorOf(guild, type, targetId, withinMs) {
 }
 
 // ===== التنبيه المصمم =====
+// ترجع تقريراً بالعربي: وش صار بالضبط (صورة/نص · الروم · الخاص) — تستخدمه صفحة «تجربة التنبيه»
 async function notify(guild, { title, lines, culprit, culpritName, avatarURL, stats, tone = 'bad' }) {
     const cfg = get(guild.id);
+    const rep = { art: false, channel: '', dm: '', channelId: cfg.alertChannelId || '', dmOn: !!cfg.alertDM };
     const text = [`🛡️ **درع نوفا** — ${title}`, ...lines].join('\n');
     let payload = { content: text.slice(0, 1900) };
     if (art.available()) {
@@ -236,6 +238,7 @@ async function notify(guild, { title, lines, culprit, culpritName, avatarURL, st
             stats: stats || [], server: guild.name
         }), 7000, 'بطاقة التنبيه الأمني');
         if (png) {
+            rep.art = true;
             const e = new EmbedBuilder().setColor(tone === 'bad' ? 0xb3121e : 0x2f7d4f).setImage('attachment://alert.png')
                 .setDescription(lines.join('\n').slice(0, 400));
             payload = { embeds: [e], files: [new AttachmentBuilder(png, { name: 'alert.png' })] };
@@ -250,20 +253,25 @@ async function notify(guild, { title, lines, culprit, culpritName, avatarURL, st
             content: ([`<@${CONFIG.ARTHUR_ID}>`, `**🛡️ درع نوفا — ${title}**`, ...lines].join('\n')).slice(0, 1900),
             allowedMentions: { users: [CONFIG.ARTHUR_ID].filter(Boolean) }
         };
+        const why = art.available() ? 'فشل رسم الصورة (رجّعنا نص)' : 'محرك الصور مو متاح (نص فقط)';
+        rep.art = false; rep.artNote = why;
     }
     if (cfg.alertChannelId) {
         try {
             const ch = guild.channels.cache.get(cfg.alertChannelId) || await guild.channels.fetch(cfg.alertChannelId).catch(() => null);
-            if (ch && ch.isTextBased()) await ch.send(payload);
-        } catch (err) { logErr('إرسال التنبيه بالروم', err); }
-    }
+            if (!ch) rep.channel = '⚠️ ما لقيت الروم (آيديه غلط أو انحذف)';
+            else if (!ch.isTextBased()) rep.channel = '⚠️ المحدد مو روم كتابي';
+            else { await ch.send(payload); rep.channel = '✅ أُرسل إلى #' + ch.name; }
+        } catch (err) { rep.channel = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالروم', err); }
+    } else rep.channel = '⚠️ ما اخترت روم تنبيهات (خانة فاضية)';
     if (cfg.alertDM) {
         try {
             const u = await guild.client.users.fetch(CONFIG.ARTHUR_ID);
-            if (u) await u.send(payload);
-        } catch (err) { logErr('إرسال التنبيه بالخاص', err); }
-    }
-    return true;
+            if (!u) rep.dm = '⚠️ ما لقيت حساب الملكي';
+            else { await u.send(payload); rep.dm = '✅ أُرسلت على الخاص'; }
+        } catch (err) { rep.dm = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالخاص', err); }
+    } else rep.dm = '⚠️ مفتاح «التنبيه بالخاص» مطفي';
+    return rep;
 }
 
 // ===== العقوبة =====

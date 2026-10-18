@@ -45,7 +45,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.8';
+const BUILD = '2026-10-18.9';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -722,9 +722,16 @@ m.appendChild(card('حالة السيرفر',el('div',{},[
 m.appendChild(row([
  el('button',{class:'b2',text:'🔒 قفل السيرفر فوراً',on:{click:function(){if(!confirm('نقفل كل الرومات فوراً؟ ما يقدر أحد يكتب غير الملكيين.'))return;go(api('guard/lock',{on:true,confirm:true}),'انقفل السيرفر 🔒 🛡️','guard')}}}),
  el('button',{class:'b2',text:'🔓 فتح السيرفر',on:{click:function(){go(api('guard/lock',{on:false,confirm:true}),'انفتح السيرفر 🔓 🛡️','guard')}}}),
- el('button',{class:'b2',text:'🧪 تجربة التنبيه',on:{click:function(){go(api('guard/test',{}),'انرسل تنبيه تجريبي ✅',null)}}}),
+ el('button',{class:'b2',text:'🧪 تجربة التنبيه',on:{click:function(){
+  toast('جاري إرسال التنبيه…');
+  api('guard/test',{}).then(function(r){var p=(r&&r.report)||{};
+   var t=['🧪 نتيجة تجربة التنبيه:','','• البطاقة: '+(p.art?'🖼️ صورة مصممة':'📝 نص عادي'+(p.artNote?' ('+p.artNote+')':'')),'• روم التنبيهات: '+(p.channel||'—'),'• الرسالة الخاصة: '+(p.dm||'—'),'• سجل التدقيق: '+(p.audit||'—'),'• صلاحيات البوت: '+(p.perms||'—'),'','(هذي النافذة تطلع لك دايماً بعد كل تجربة — صورها وابعثها لو فيه مشكلة)'].join('\\n');
+   var bx=document.getElementById('gtesterr');if(bx)bx.textContent=t;
+   alert(t);
+  }).catch(function(e){toast(e.message,1);alert('⛔ فشل طلب التجربة: '+e.message)})}}}),
  el('button',{class:'b2',text:'🧹 تصفير الحوادث',on:{click:function(){if(!confirm('نمسح كل سجل الحوادث؟'))return;go(api('guard/clear',{}),'انمسح السجل ✅','guard')}}})
 ]));
+m.appendChild(el('div',{class:'mut',id:'gtesterr',style:'white-space:pre-line;margin-top:8px'}));
 // ٢) الإعدادات
 m.appendChild(card('الإعدادات الأساسية',el('div',{},[
  tgl('enabled','تفعيل درع نوفا (الحماية كلها)'),
@@ -1618,14 +1625,20 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         return r;
     }));
     api.post('/guard/test', h(async (g, b, req) => {
-        await guard.notify(g, {
+        const rep = await guard.notify(g, {
             title: 'هذا تنبيه تجريبي 🧪',
             lines: ['لو وصلتك هذي البطاقة، فالتنبيهات شغالة 100% ✅', `**أرسلها:** ${req.user.name}`, 'بترسل هنا تلقائياً أي محاولة تخريب بالجملة (حذف رومات/رتب، حظر أعضاء، رايد، سبام…).'],
             culprit: req.user.id, culpritName: req.user.name,
             stats: [{ label: 'الحالة', value: 'شغال' }]
         });
+        // فحص قدرة البوت على قراءة سجل التدقيق (عليها تعتمد معرفة مين المخرب)
+        try { await g.fetchAuditLogs({ limit: 1 }); rep.audit = '✅ يقرأ سجل التدقيق'; }
+        catch (e) { rep.audit = '⛔ ما يقدر يقرأه: ' + e.message; }
+        const me = g.members.me;
+        const need = { BanMembers: 'حظر الأعضاء', ManageRoles: 'إدارة الرتب', ManageChannels: 'إدارة الرومات', ManageWebhooks: 'إدارة الويب هوكس', ModerateMembers: 'كتم الأعضاء' };
+        rep.perms = me ? (Object.keys(need).filter(k => !me.permissions.has(k)).map(k => 'ناقص: ' + need[k]).join(' · ') || '✅ عنده كل الصلاحيات المطلوبة') : '⚠️ ما عرفت الصلاحيات';
         note(req, 'إرسال تنبيه حماية تجريبي');
-        return { ok: true };
+        return { ok: true, report: rep };
     }));
     api.post('/guard/clear', h(async (g, b, req) => {
         guard.clearIncidents(g.id);
