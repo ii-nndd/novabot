@@ -42,6 +42,7 @@ const DEF = {
     windowSec: 10,          // نافذة العدّ: كم ثانية نحسب فيها التكرار
     alertChannelId: '',     // روم التنبيهات (فاضي = رسالة خاصة للملكي)
     alertDM: true,          // يرسل كذلك رسالة خاصة للملكي
+    alertUsers: [],         // آيديات إضافية ينرسل لها التنبيه بالخاص (غير ارثر/إيدا/صاحب السيرفر)
     limits: {
         channelDelete: 3, channelCreate: 6, roleDelete: 3, roleCreate: 6,
         roleUpdate: 6, ban: 3, kick: 3, webhook: 3, emoji: 5, invite: 6, overwrite: 8
@@ -63,6 +64,7 @@ function get(gid) {
         ...DEF, ...c,
         limits: { ...DEF.limits, ...(c.limits || {}) },
         whitelist: { users: ids((w.users || []).join(' ')), roles: ids((w.roles || []).join(' ')), bots: ids((w.bots || []).join(' ')) },
+        alertUsers: ids((c.alertUsers || []).join(' ')),
         raid: { ...DEF.raid, ...(c.raid || {}) },
         spam: { ...DEF.spam, ...(c.spam || {}) }
     };
@@ -85,6 +87,7 @@ function set(gid, b) {
             ? (/^\d{5,25}$/.test(String(b.alertChannelId)) ? String(b.alertChannelId) : '')
             : cur.alertChannelId,
         alertDM: 'alertDM' in b ? !!b.alertDM : cur.alertDM,
+        alertUsers: ids(b.alertUsersText !== undefined ? b.alertUsersText : (cur.alertUsers || []).join(' ')),
         limits: {
             channelDelete: clampNum(lim.channelDelete ?? b.channelDelete, 1, 50, cur.limits.channelDelete),
             channelCreate: clampNum(lim.channelCreate ?? b.channelCreate, 1, 50, cur.limits.channelCreate),
@@ -265,11 +268,25 @@ async function notify(guild, { title, lines, culprit, culpritName, avatarURL, st
         } catch (err) { rep.channel = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالروم', err); }
     } else rep.channel = '⚠️ ما اخترت روم تنبيهات (خانة فاضية)';
     if (cfg.alertDM) {
-        try {
-            const u = await guild.client.users.fetch(CONFIG.ARTHUR_ID);
-            if (!u) rep.dm = '⚠️ ما لقيت حساب الملكي';
-            else { await u.send(payload); rep.dm = '✅ أُرسلت على الخاص'; }
-        } catch (err) { rep.dm = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالخاص', err); }
+        // ديسكورد يرفض الخاص لو البوت ما يشارك الحساب أي سيرفر → نرسل لكل ملكي «موجود فعلاً بالسيرفر»
+        const targets = [
+            ['ارثر', CONFIG.ARTHUR_ID],
+            ['إيدا', CONFIG.SPECIAL_USER_ID],
+            ['صاحب السيرفر', guild.ownerId]
+        ].concat((cfg.alertUsers || []).map(id => ['إضافي', id]))
+            .filter(t => t[1]).filter((t, i, a) => a.findIndex(x => x[1] === t[1]) === i);
+        const out = [];
+        for (const [label, id] of targets) {
+            let mem = guild.members.cache.get(id) || null;
+            if (!mem) { try { mem = await guild.members.fetch(id); } catch { mem = null; } }
+            if (!mem) { out.push('⚠️ ' + label + ' (' + id + ') مو بالسيرفر'); continue; }
+            try {
+                const u = mem.user || await guild.client.users.fetch(id);
+                await u.send(payload);
+                out.push('✅ ' + (mem.displayName || u.username || label));
+            } catch (err) { out.push('⛔ ' + label + ': ' + (err && err.message || err)); logErr('إرسال التنبيه بالخاص', err); }
+        }
+        rep.dm = out.length ? out.join(' · ') : '⚠️ ما فيه حساب محدد للتنبيه';
     } else rep.dm = '⚠️ مفتاح «التنبيه بالخاص» مطفي';
     return rep;
 }

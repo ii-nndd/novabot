@@ -45,7 +45,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.9';
+const BUILD = '2026-10-18.10';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -698,6 +698,7 @@ var st={enabled:!!c.enabled,revert:!!c.revert,strict:!!c.strictAll,po:!!c.protec
 function tgl(k,t){return el('div',{class:'row',style:'margin:10px 0'},[sw(st[k],function(v){st[k]=v}),el('span',{text:t})])}
 var mode=el('select',{},[opt('ban','🚫 حظر فوري'),opt('kick','👢 طرد فوري'),opt('derole','🎭 سحب كل رتبه')]);mode.value=c.mode;
 var ac=sel('بدون روم (تنبيه بالخاص فقط)',d.channels,c.alertChannelId);
+var au=el('textarea',{placeholder:'آيدي أي حساب ثاني ينرسل له التنبيه بالخاص، كل وحد بسطر (مثلاً حسابك)'});au.value=(c.alertUsers||[]).join('\\n');
 var win=inp(c.windowSec,3,120),L=c.limits;
 var Lc={cd:inp(L.channelDelete,1,50),cc:inp(L.channelCreate,1,50),rd:inp(L.roleDelete,1,50),rc:inp(L.roleCreate,1,50),ru:inp(L.roleUpdate,1,50),bn:inp(L.ban,1,50),kk:inp(L.kick,1,50),wh:inp(L.webhook,1,50),em:inp(L.emoji,1,50),iv:inp(L.invite,1,50),ow:inp(L.overwrite,1,50)};
 var us=el('textarea',{placeholder:'آيدي كل عضو مستثنى، كل وحد بسطر'});us.value=(c.whitelist.users||[]).join('\\n');
@@ -709,7 +710,7 @@ var rj=inp(c.raid.joins,2,100),rsx=inp(c.raid.sec,3,600),rmd=inp(c.raid.minDays,
 var sm=inp(c.spam.msgs,3,60),ss=inp(c.spam.sec,2,60),sd=inp(c.spam.dupMsgs,2,20),sn=inp(c.spam.mentions,3,50),stm=inp(c.spam.timeoutMin,1,1440);
 function body(){return{enabled:st.enabled,mode:mode.value,revert:st.revert,strictAll:st.strict,protectOwners:st.po,punishBots:st.pb,alertDM:st.dm,alertChannelId:ac.value,windowSec:win.value,
 limits:{channelDelete:Lc.cd.value,channelCreate:Lc.cc.value,roleDelete:Lc.rd.value,roleCreate:Lc.rc.value,roleUpdate:Lc.ru.value,ban:Lc.bn.value,kick:Lc.kk.value,webhook:Lc.wh.value,emoji:Lc.em.value,invite:Lc.iv.value,overwrite:Lc.ow.value},
-usersText:us.value,botsText:bs.value,roleIds:pickRoles(),
+usersText:us.value,botsText:bs.value,roleIds:pickRoles(),alertUsersText:au.value,
 raidEnabled:st.raid,joins:rj.value,raidSec:rsx.value,minDays:rmd.value,kickNew:st.kickNew,autoUnlockMin:rau.value,
 spamEnabled:st.spam,spamMsgs:sm.value,spamSec:ss.value,dupMsgs:sd.value,mentions:sn.value,timeoutMin:stm.value}}
 // ١) الحالة والقفل
@@ -742,6 +743,7 @@ m.appendChild(card('الإعدادات الأساسية',el('div',{},[
  tgl('dm','أرسل التنبيه برسالة خاصة للملكي'),
  el('div',{class:'mut',style:'margin-top:8px',text:'العقوبة الافتراضية عند التخريب الجماعي'}),mode,
  el('p'),el('div',{class:'mut',text:'روم التنبيهات (يستحسن روم خاص للملكية)'}),ac,
+ el('p'),el('div',{class:'mut',text:'آيديات إضافية للتنبيه بالخاص (اختياري — لو تبي التنبيه يوصل لحساب ثاني غير ارثر وإيدا)'}),au,
  el('p'),el('div',{class:'mut',text:'نافذة العدّ بالثواني (نحسب التكرار خلالها)'}),win
 ])));
 // ٣) حدود التخريب
