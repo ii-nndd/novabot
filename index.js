@@ -22,6 +22,7 @@ const giveaway = require('./giveaway');
 const selfroles = require('./selfroles');
 const jail = require('./jail');
 const trap = require('./trap');
+const guard = require('./guard');
 const colors = require('./colors');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
@@ -77,8 +78,10 @@ const client = new Client({
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers   // للترحيب وصفحة الأعضاء: فعّل Server Members Intent في موقع المطورين
-    ]
+        GatewayIntentBits.GuildMembers,  // للترحيب وصفحة الأعضاء: فعّل Server Members Intent في موقع المطورين
+        // 🛡️ درع نوفا: لاستقبال أحداث الحظر (GuildBans = GuildModeration في v14)
+        (GatewayIntentBits.GuildModeration ?? GatewayIntentBits.GuildBans)
+    ].filter(i => i !== undefined)
 });
 
 // ====================================================================
@@ -264,7 +267,7 @@ const commands = [
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('ألوان').setDescription('يعيد توليد صورة الألوان ويحدّث بانل الألوان (للملكيين فقط)'),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands);
 
 // ====================================================================
 // 7. تشغيل البوت (جاهز للعمل + إعادة التشغيل التلقائي)
@@ -289,6 +292,7 @@ async function onClientReady() {
         giveaway.reschedule(client);
         jail.init(client);
         trap.init(client, CONFIG);
+        guard.init(client, CONFIG);
         colors.init(client, CONFIG);
     }
 
@@ -327,6 +331,8 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
     if (!interaction.isChatInputCommand()) return;
+    // 🛡️ أمر الحماية يشتغل من أي روم (لو صار نك لازم نقدر نقفل السيرفر بأسرع وقت)
+    if (await guard.handle(interaction, { getTier, CONFIG, pick })) return;
     // الرومات المسموح فيها: لو الروم معطّل أو خارج القائمة المسموحة، البوت يتجاهل الأمر تماماً
     if (interaction.guild && interaction.channel && !botcontrol.canInteract(interaction.guild.id, interaction.channel.id)) return;
     if (await tickets.handle(interaction, { getTier, CONFIG, pick })) return;

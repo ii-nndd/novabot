@@ -9,6 +9,7 @@ const welcome = require('./welcome');
 const tickets = require('./tickets');
 const jail = require('./jail');
 const trap = require('./trap');
+const guard = require('./guard');
 const points = require('./points');
 const levels = require('./levels');
 const botcontrol = require('./botcontrol');
@@ -44,7 +45,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.7';
+const BUILD = '2026-10-18.8';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -296,7 +297,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -686,6 +687,97 @@ var ex=el('textarea',{placeholder:'آيدي كل عضو أو بوت مستثنى
 function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
 m.appendChild(card('الإعدادات',el('div',{},[lab('تفعيل روم الفخ',en),el('div',{class:'mut',text:'روم الفخ'}),tc,el('p'),el('div',{class:'mut',text:'آيديات مستثناة (بوتات ثانية عندك مثلاً)'}),ex])));
 m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){api('trap/save',{enabled:en.checked,channelId:tc.value,exemptIdsText:ex.value}).then(function(){toast('انحفظ ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
+// ===== الحماية (درع نوفا) =====
+pages.guard=function(m){return api('guard').then(function(d){var c=d.config,cap=d.caps||{};
+m.appendChild(el('h1',{text:'الحماية'}));
+m.appendChild(el('div',{class:'mut',text:'درع نوفا: حماية سيرفرك من النك والاختراق — حذف الرومات والرتب بالجملة، حظر أو طرد الأعضاء بالجملة، إعطاء رتب خطيرة لأي أحد، تخريب الصلاحيات، الويب هوكس، الإيموجي والدعوات، الرايد، والسبام. يعاقب المخرب ويرجّع اللي انخرب تلقائياً.'}));
+function inp(v,mn,mx,w){var i=el('input',{type:'number',min:String(mn),max:String(mx),style:'width:'+(w||88)+'px'});i.value=String(v);return i}
+function fld(t,elm){return el('div',{style:'margin:6px 10px 6px 0'},[el('div',{class:'mut',text:t}),elm])}
+function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
+var st={enabled:!!c.enabled,revert:!!c.revert,strict:!!c.strictAll,po:!!c.protectOwners,pb:!!c.punishBots,dm:!!c.alertDM,raid:!!c.raid.enabled,kickNew:!!c.raid.kickNew,spam:!!c.spam.enabled};
+function tgl(k,t){return el('div',{class:'row',style:'margin:10px 0'},[sw(st[k],function(v){st[k]=v}),el('span',{text:t})])}
+var mode=el('select',{},[opt('ban','🚫 حظر فوري'),opt('kick','👢 طرد فوري'),opt('derole','🎭 سحب كل رتبه')]);mode.value=c.mode;
+var ac=sel('بدون روم (تنبيه بالخاص فقط)',d.channels,c.alertChannelId);
+var win=inp(c.windowSec,3,120),L=c.limits;
+var Lc={cd:inp(L.channelDelete,1,50),cc:inp(L.channelCreate,1,50),rd:inp(L.roleDelete,1,50),rc:inp(L.roleCreate,1,50),ru:inp(L.roleUpdate,1,50),bn:inp(L.ban,1,50),kk:inp(L.kick,1,50),wh:inp(L.webhook,1,50),em:inp(L.emoji,1,50),iv:inp(L.invite,1,50),ow:inp(L.overwrite,1,50)};
+var us=el('textarea',{placeholder:'آيدي كل عضو مستثنى، كل وحد بسطر'});us.value=(c.whitelist.users||[]).join('\\n');
+var bs=el('textarea',{placeholder:'آيدي كل بوت موثوق، كل وحد بسطر'});bs.value=(c.whitelist.bots||[]).join('\\n');
+var rs=el('select',{multiple:'multiple',size:'6'},(d.roles||[]).map(function(r){return opt(r.id,r.name)}));
+[].forEach.call(rs.options,function(o){if((c.whitelist.roles||[]).indexOf(o.value)>=0)o.selected=true});
+function pickRoles(){var a=[];[].forEach.call(rs.options,function(o){if(o.selected)a.push(o.value)});return a}
+var rj=inp(c.raid.joins,2,100),rsx=inp(c.raid.sec,3,600),rmd=inp(c.raid.minDays,0,365),rau=inp(c.raid.autoUnlockMin,0,1440);
+var sm=inp(c.spam.msgs,3,60),ss=inp(c.spam.sec,2,60),sd=inp(c.spam.dupMsgs,2,20),sn=inp(c.spam.mentions,3,50),stm=inp(c.spam.timeoutMin,1,1440);
+function body(){return{enabled:st.enabled,mode:mode.value,revert:st.revert,strictAll:st.strict,protectOwners:st.po,punishBots:st.pb,alertDM:st.dm,alertChannelId:ac.value,windowSec:win.value,
+limits:{channelDelete:Lc.cd.value,channelCreate:Lc.cc.value,roleDelete:Lc.rd.value,roleCreate:Lc.rc.value,roleUpdate:Lc.ru.value,ban:Lc.bn.value,kick:Lc.kk.value,webhook:Lc.wh.value,emoji:Lc.em.value,invite:Lc.iv.value,overwrite:Lc.ow.value},
+usersText:us.value,botsText:bs.value,roleIds:pickRoles(),
+raidEnabled:st.raid,joins:rj.value,raidSec:rsx.value,minDays:rmd.value,kickNew:st.kickNew,autoUnlockMin:rau.value,
+spamEnabled:st.spam,spamMsgs:sm.value,spamSec:ss.value,dupMsgs:sd.value,mentions:sn.value,timeoutMin:stm.value}}
+// ١) الحالة والقفل
+var miss=[];if(!cap.ban)miss.push('حظر الأعضاء');if(!cap.manageRoles)miss.push('إدارة الرتب');if(!cap.manageChannels)miss.push('إدارة الرومات');if(!cap.audit)miss.push('عرض سجل التدقيق');
+m.appendChild(card('حالة السيرفر',el('div',{},[
+ el('div',{class:'row'},[el('span',{class:'tag '+(c.enabled?'on':'off'),text:c.enabled?'✅ الحماية شغالة':'⛔ الحماية مطفية'}),el('span',{class:'tag '+(d.locked?'off':'on'),text:d.locked?'🔒 السيرفر مقفول':'🔓 السيرفر مفتوح'}),el('span',{class:'tag',text:'العقوبة: '+(c.mode==='ban'?'حظر':c.mode==='kick'?'طرد':'سحب الرتب')})]),
+ el('div',{class:'mut',style:'margin-top:8px',text:miss.length?('⚠️ البوت ناقصه صلاحيات: '+miss.join('، ')+' — لازم تعطيه إياها من صلاحيات رتبته.'):'✅ البوت عنده كل الصلاحيات المطلوبة (حظر، إدارة رتب، إدارة رومات، سجل التدقيق).'}),
+ el('div',{class:'mut',text:'ترتيب رتبة البوت: '+cap.highest+' من '+cap.total+' — لازم رتبته فوق رتبة أي مخرب عشان يقدر يعاقبه.'})
+])));
+m.appendChild(row([
+ el('button',{class:'b2',text:'🔒 قفل السيرفر فوراً',on:{click:function(){if(!confirm('نقفل كل الرومات فوراً؟ ما يقدر أحد يكتب غير الملكيين.'))return;go(api('guard/lock',{on:true,confirm:true}),'انقفل السيرفر 🔒 🛡️','guard')}}}),
+ el('button',{class:'b2',text:'🔓 فتح السيرفر',on:{click:function(){go(api('guard/lock',{on:false,confirm:true}),'انفتح السيرفر 🔓 🛡️','guard')}}}),
+ el('button',{class:'b2',text:'🧪 تجربة التنبيه',on:{click:function(){go(api('guard/test',{}),'انرسل تنبيه تجريبي ✅',null)}}}),
+ el('button',{class:'b2',text:'🧹 تصفير الحوادث',on:{click:function(){if(!confirm('نمسح كل سجل الحوادث؟'))return;go(api('guard/clear',{}),'انمسح السجل ✅','guard')}}})
+]));
+// ٢) الإعدادات
+m.appendChild(card('الإعدادات الأساسية',el('div',{},[
+ tgl('enabled','تفعيل درع نوفا (الحماية كلها)'),
+ tgl('revert','إرجاع اللي انخرب تلقائياً (رومات/رتب/حظر/صلاحيات)'),
+ tgl('strict','أقصى حماية: عاقب حتى على تغيير الصلاحيات وإعطاء الرتب'),
+ tgl('po','حماية حتى الملكيين وارثر وإيدا (لما حسابك ينخترق)'),
+ tgl('pb','عاقب البوتات الثانية مثل الأعضاء (بوتات النك)'),
+ tgl('dm','أرسل التنبيه برسالة خاصة للملكي'),
+ el('div',{class:'mut',style:'margin-top:8px',text:'العقوبة الافتراضية عند التخريب الجماعي'}),mode,
+ el('p'),el('div',{class:'mut',text:'روم التنبيهات (يستحسن روم خاص للملكية)'}),ac,
+ el('p'),el('div',{class:'mut',text:'نافذة العدّ بالثواني (نحسب التكرار خلالها)'}),win
+])));
+// ٣) حدود التخريب
+m.appendChild(card('حدود التخريب (عدد الحركات اللي بعدها نعتبره مخرب)',el('div',{},[
+ el('div',{class:'row'},[fld('حذف رومات',Lc.cd),fld('إنشاء رومات',Lc.cc),fld('حذف رتب',Lc.rd),fld('إنشاء رتب',Lc.rc),fld('تعديل رتب',Lc.ru),fld('حظر أعضاء',Lc.bn)]),
+ el('div',{class:'row'},[fld('طرد أعضاء',Lc.kk),fld('ويب هوكس',Lc.wh),fld('حذف إيموجي',Lc.em),fld('إنشاء دعوات',Lc.iv),fld('تخريب صلاحيات',Lc.ow)]),
+ el('div',{class:'mut',text:'أي إعطاء لصلاحية خطيرة (Administrator/إدارة الرتب/الحظر…) يُرصد فوراً ولو حركة وحدة — حتى لو أعطاها أدمن.'})
+])));
+// ٤) المستثنون
+m.appendChild(card('المستثنون (ما تنطبق عليهم الحماية)',el('div',{},[
+ el('div',{class:'mut',text:'ارثر وإيدا والرتبة الملكية وصاحب السيرفر محميين دايماً تلقائياً (إلا لو فعّلت «حماية حتى الملكيين»).'}),
+ el('div',{class:'mut',style:'margin-top:8px',text:'آيديات أعضاء مستثنين'}),us,
+ el('p'),el('div',{class:'mut',text:'آيديات بوتات موثوقة'}),bs,
+ el('p'),el('div',{class:'mut',text:'رتب مستثناة (اضغط Ctrl لاختيار أكثر من وحدة)'}),rs
+])));
+// ٥) الرايد
+m.appendChild(card('مقاومة الرايد (دخول أعضاء بالجملة)',el('div',{},[
+ tgl('raid','تفعيل مقاومة الرايد'),
+ el('div',{class:'row'},[fld('عدد الداخلين',rj),fld('خلال (ثانية)',rsx),fld('أقل عمر حساب (يوم)',rmd),fld('فتح تلقائي بعد (دقيقة)',rau)]),
+ tgl('kickNew','اطرد الحسابات الجديدة فوراً (حماية استباقية)'),
+ el('div',{class:'mut',text:'لما يدخلون أكثر من العدد خلال المدة: يقفل السيرفر فوراً ويرسل تنبيه، ويفتح تلقائياً بعد المدة (صفر = يقفل لين تفتحه بنفسك).'})
+])));
+// ٦) السبام
+m.appendChild(card('مقاومة السبام',el('div',{},[
+ tgl('spam','تفعيل مقاومة السبام'),
+ el('div',{class:'row'},[fld('عدد الرسائل',sm),fld('خلال (ثانية)',ss),fld('تكرار نفس الرسالة',sd),fld('حد المنشن',sn),fld('مدة الكتم (دقيقة)',stm)]),
+ el('div',{class:'mut',text:'السبام والتكرار والمنشن الجماعي = حذف الرسائل + كتم. ومنشن @everyone من غير الملكيين = حذف الرسالة فوراً.'})
+])));
+// ٧) حوادث
+var inc=d.incidents||[],incBox=el('div',{});
+if(!inc.length)incBox.appendChild(el('div',{class:'mut',text:'ما فيه أي محاولة تخريب مسجّلة ✅ سيرفرك نظيف.'}));
+inc.forEach(function(l){incBox.appendChild(el('div',{class:'item'},[
+ el('span',{class:'nm',text:(l.name||l.uid)+''}),
+ el('span',{class:'tag',text:l.type==='ban'?'حظر بالجملة':l.type==='channelDelete'?'حذف رومات':l.type==='roleDelete'?'حذف رتب':l.type==='kick'?'طرد بالجملة':l.type==='raid'?'رايد':l.type==='spam'?'سبام':l.type==='roleGrant'?'رتبة خطيرة':l.type==='everyonePerm'?'صلاحيات @everyone':l.type}),
+ el('span',{class:'mut',text:(l.detail||'')+' • '+(l.undone?'رجعنا '+l.undone+' • ':'')+(l.action||'')+' • '+new Date(l.at).toLocaleString('ar')})
+]))});
+m.appendChild(card('آخر محاولات التخريب',incBox));
+// ٨) حفظ
+m.appendChild(row([
+ el('button',{class:'btn',text:'💾 حفظ كل الإعدادات',on:{click:function(){go(api('guard/save',body()),'انحفظ ✅ 🛡️','guard')}}}),
+ el('button',{class:'b2',text:'🔄 رجّع الافتراضي',on:{click:function(){if(!confirm('نرجّع كل الإعدادات للافتراضي؟ (ما يأثر على المستثنين)'))return;go(api('guard/reset',{}),'رجعنا الافتراضي ✅','guard')}}})
+]));
+return Promise.resolve()})};
 pages.bans=function(m){return api('bans').then(function(d){
 m.appendChild(el('h1',{text:'المحظورين'}));
 m.appendChild(el('div',{class:'mut',text:'كل المحظورين بالسيرفر من أي مصدر. اللي انحظر من روم الفخ عليه وسم 🪤. تقدر تفك الحظر مباشرة من هنا.'}));
@@ -1482,6 +1574,63 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const r = await jail.syncAll(g, cfg);
         note(req, `مزامنة نظام السجن (${r.ok}/${r.total} روم)`);
         return r;
+    }));
+
+    // ===== الحماية (درع نوفا): إعدادات + قفل فوري + تنبيه تجريبي + سجل الحوادث =====
+    api.get('/guard', h(async (g) => {
+        await g.channels.fetch().catch(() => {});
+        const cfg = guard.get(g.id);
+        const me = g.members.me;
+        const locks = store.read('guardlock.json', {});
+        return {
+            config: cfg,
+            locked: locks[g.id] ? { at: locks[g.id].at, by: locks[g.id].by, reason: locks[g.id].reason || '', channels: Object.keys(locks[g.id].saved || {}).length } : null,
+            channels: [...g.channels.cache.values()].filter(c => c.isTextBased && c.isTextBased() && !c.isThread?.())
+                .map(c => ({ id: c.id, name: '# ' + c.name })),
+            roles: [...g.roles.cache.values()].filter(r => r.id !== g.id && !r.managed)
+                .sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name })),
+            incidents: guard.incidents(g.id, 40),
+            caps: {
+                ban: me ? me.permissions.has('BanMembers') : false,
+                kick: me ? me.permissions.has('KickMembers') : false,
+                manageRoles: me ? me.permissions.has('ManageRoles') : false,
+                manageChannels: me ? me.permissions.has('ManageChannels') : false,
+                audit: me ? me.permissions.has('ViewAuditLog') : false,
+                highest: me ? me.roles.highest.position : 0,
+                total: g.roles.cache.size
+            }
+        };
+    }));
+    api.post('/guard/save', h(async (g, b, req) => {
+        const cfg = guard.set(g.id, b);
+        note(req, `تعديل إعدادات الحماية (${cfg.enabled ? 'مفعلة' : 'معطلة'} · عقوبة: ${cfg.mode})`);
+        return { ok: true, config: cfg };
+    }));
+    api.post('/guard/reset', h(async (g, b, req) => {
+        guard.reset(g.id);
+        note(req, 'رجوع إعدادات الحماية للافتراضي');
+        return { ok: true };
+    }));
+    api.post('/guard/lock', h(async (g, b, req) => {
+        if (b.confirm !== true) throw new Error('يحتاج تأكيد');
+        const r = await guard.lockdown(g, !!b.on, { by: req.user.name, reason: 'قفل من لوحة التحكم' });
+        note(req, b.on ? '🔒 قفل السيرفر فوراً (Panic)' : '🔓 فتح السيرفر');
+        return r;
+    }));
+    api.post('/guard/test', h(async (g, b, req) => {
+        await guard.notify(g, {
+            title: 'هذا تنبيه تجريبي 🧪',
+            lines: ['لو وصلتك هذي البطاقة، فالتنبيهات شغالة 100% ✅', `**أرسلها:** ${req.user.name}`, 'بترسل هنا تلقائياً أي محاولة تخريب بالجملة (حذف رومات/رتب، حظر أعضاء، رايد، سبام…).'],
+            culprit: req.user.id, culpritName: req.user.name,
+            stats: [{ label: 'الحالة', value: 'شغال' }]
+        });
+        note(req, 'إرسال تنبيه حماية تجريبي');
+        return { ok: true };
+    }));
+    api.post('/guard/clear', h(async (g, b, req) => {
+        guard.clearIncidents(g.id);
+        note(req, 'تصفير سجل حوادث الحماية');
+        return { ok: true };
     }));
 
     // ===== المستويات والرتب: معدلات الخبرة + المتصدرين + تعديل XP أي عضو =====
