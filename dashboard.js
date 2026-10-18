@@ -10,6 +10,7 @@ const tickets = require('./tickets');
 const jail = require('./jail');
 const trap = require('./trap');
 const guard = require('./guard');
+const presence = require('./presence');
 const points = require('./points');
 const levels = require('./levels');
 const botcontrol = require('./botcontrol');
@@ -45,7 +46,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.10';
+const BUILD = '2026-10-18.11';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -297,7 +298,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -687,6 +688,73 @@ var ex=el('textarea',{placeholder:'آيدي كل عضو أو بوت مستثنى
 function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
 m.appendChild(card('الإعدادات',el('div',{},[lab('تفعيل روم الفخ',en),el('div',{class:'mut',text:'روم الفخ'}),tc,el('p'),el('div',{class:'mut',text:'آيديات مستثناة (بوتات ثانية عندك مثلاً)'}),ex])));
 m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){api('trap/save',{enabled:en.checked,channelId:tc.value,exemptIdsText:ex.value}).then(function(){toast('انحفظ ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
+// ===== حالة البوت (Presence) =====
+pages.presence=function(m){return api('presence').then(function(d){var c=d.config,st=d.state||{};
+m.appendChild(el('h1',{text:'حالة البوت'}));
+m.appendChild(el('div',{class:'mut',text:'هنا تضبط «وش يبيّن العبد» على ديسكورد: حالات دوّارة تتبدّل لحالها (يلعب · يشاهد · يستمع · ينافس · يبث) + حالات ديناميكية بأرقام حقيقية (عدد الأعضاء · مدة الصمود) + مرآة نشاط الملكيين (لو ارثر أو إيدا يلعب شي، تطلع حالته على البوت).'}));
+function inp(v,mn,mx,w){var i=el('input',{type:'number',min:String(mn),max:String(mx),style:'width:'+(w||88)+'px'});i.value=String(v);return i}
+function fld(t,elm){return el('div',{style:'margin:6px 10px 6px 0'},[el('div',{class:'mut',text:t}),elm])}
+function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
+var TYPES=[['play','🎮 يلعب'],['watch','👀 يشاهد'],['listen','🎧 يستمع إلى'],['compete','🏆 ينافس في'],['stream','🔴 يبث (يحتاج رابط)']];
+var s={enabled:!!c.enabled,dyn:!!c.dynamic,mir:!!c.mirror};
+function tgl(k,t){return el('div',{class:'row',style:'margin:10px 0'},[sw(s[k],function(v){s[k]=v}),el('span',{text:t})])}
+var iv=inp(c.intervalSec,30,3600);
+var sts=el('select',{},[opt('online','🟢 متصل'),opt('idle','🌙 خامل'),opt('dnd','⛔ لا تزعجوني'),opt('invisible','👻 غير ظاهر')]);sts.value=c.status;
+var an=sel('بدون روم (ما ننشر)',d.channels,c.announceId);
+var mu=el('textarea',{placeholder:'آيدي كل حساب نعكس نشاطه، كل وحد بسطر (اتركه فاضي = ارثر وإيدا والرتبة الملكية)'});mu.value=(c.mirrorUsers||[]).join('\\n');
+var mm=inp(c.mirrorMinutes,1,240);
+var items=(c.items||[]).map(function(x){return{name:String(x.name||''),type:String(x.type||'play'),url:String(x.url||'')}});
+var box=el('div',{});
+function render(){
+ box.textContent='';
+ items.forEach(function(it,i){
+  var ni=el('input',{type:'text',style:'flex:1;min-width:180px'});ni.value=it.name;
+  ni.oninput=function(){it.name=ni.value};
+  var ti=el('select',{},TYPES.map(function(t){return opt(t[0],t[1])}));ti.value=it.type;
+  ti.onchange=function(){it.type=ti.value;render()};
+  var ui=el('input',{type:'text',style:'min-width:150px',placeholder:'رابط البث (twitch.tv/...)'});ui.value=it.url;
+  ui.oninput=function(){it.url=ui.value};
+  var r=el('div',{class:'row',style:'display:flex;gap:6px;align-items:center;margin:6px 0'},[
+   ni,ti,
+   el('button',{class:'b2',text:'▲',on:{click:function(){if(i>0){var x=items[i-1];items[i-1]=items[i];items[i]=x;render()}}}}),
+   el('button',{class:'b2',text:'▼',on:{click:function(){if(i<items.length-1){var x=items[i+1];items[i+1]=items[i];items[i]=x;render()}}}}),
+   el('button',{class:'b2',text:'🗑️',on:{click:function(){items.splice(i,1);render()}}})
+  ]);
+  if(it.type==='stream')r.appendChild(ui);
+  box.appendChild(r);
+ });
+ if(!items.length)box.appendChild(el('div',{class:'mut',text:'ما فيه حالات — اضغط «➕ إضافة حالة»'}));
+}
+render();
+function body(){var o={enabled:s.enabled,status:sts.value,intervalSec:iv.value,dynamic:s.dyn,mirror:s.mir,announceId:an.value,mirrorMinutes:mm.value,mirrorUsersText:mu.value};o.items=items.map(function(x){return{name:x.name,type:x.type,url:x.url}});return o}
+m.appendChild(card('الحالة الآن',el('div',{},[
+ el('div',{class:'row'},[el('span',{class:'tag '+(st.enabled?'on':'off'),text:st.enabled?'✅ الحالة شغالة':'⛔ الحالة مطفية'}),el('span',{class:'tag',text:'يبيّن: '+((st.now&&st.now.text)||'—')}),el('span',{class:'tag',text:'المصدر: '+((st.now&&st.now.source)||'—')})]),
+ el('div',{class:'mut',style:'margin-top:8px',text:'عدد الحالات: '+(st.total||0)+' — التبديل كل '+c.intervalSec+' ثانية'+(st.mirrorNow?(' · 🪞 ماسك حالة: '+st.mirrorHold):'')}),
+ el('div',{class:'mut',text:st.mirrorCapable?'✅ المرآة جاهزة (Presence Intent مفعّل عند ديسكورد).':'⚠️ Presence Intent مو مفعّل — المرآة ما بتشتغل (باقي الحالات شغالة). فعّله من Discord Developer Portal ← Bot ← Presence Intent.'}),
+ el('div',{class:'mut',text:'آخر تحديث: '+((st.now&&st.now.at)?new Date(st.now.at).toLocaleTimeString('ar-OM'):'—')})
+])));
+m.appendChild(card('الإعدادات الأساسية',el('div',{},[
+ tgl('enabled','تفعيل الحالة الدوّارة'),
+ tgl('dyn','حالات ديناميكية (عدد الأعضاء · مدة الصمود · الوقت)'),
+ tgl('mir','مرآة نشاط الملكيين (يحتاج Presence Intent)'),
+ el('div',{class:'row'},[fld('التبديل كل (ثانية)',iv),fld('حالة الحساب',sts),fld('مدة مسك حالة الشخص (دقيقة)',mm)]),
+ el('p'),el('div',{class:'mut',text:'روم إعلانات النشاط (اختياري — ينشر «فلان بدأ يلعب …») '}),an
+])));
+m.appendChild(card('قائمة الحالات',el('div',{},[
+ el('div',{class:'mut',text:'كل حالة تطلع بالدور. اكتب النص كما تبيه يظهر على ديسكورد.'}),
+ box,
+ el('div',{class:'row'},[el('button',{class:'b2',text:'➕ إضافة حالة',on:{click:function(){items.push({name:'حالة جديدة',type:'play',url:''});render()}}})])
+])));
+m.appendChild(card('مرآة النشاط — من نقلّد؟',el('div',{},[
+ el('div',{class:'mut',text:'اترك الفراغ = ارثر وإيدا وأي عضو بالرتبة الملكية. أو اكتب آيديات محددة (كل آيدي بسطر).'}),
+ mu
+])));
+m.appendChild(row([
+ el('button',{class:'btn',text:'💾 حفظ كل الإعدادات',on:{click:function(){go(api('presence/save',body()),'انحفظت حالة البوت ✅','presence')}}}),
+ el('button',{class:'b2',text:'🎮 طبّق الحالة الآن',on:{click:function(){go(api('presence/apply',{}),'انطبقت الحالة 🎮','presence')}}}),
+ el('button',{class:'b2',text:'🔄 رجوع الافتراضي',on:{click:function(){if(!confirm('نرجّع حالات البوت للافتراضي؟'))return;go(api('presence/reset',{}),'رجعنا الافتراضي','presence')}}})
+]));
+})};
 // ===== الحماية (درع نوفا) =====
 pages.guard=function(m){return api('guard').then(function(d){var c=d.config,cap=d.caps||{};
 m.appendChild(el('h1',{text:'الحماية'}));
@@ -1646,6 +1714,36 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         guard.clearIncidents(g.id);
         note(req, 'تصفير سجل حوادث الحماية');
         return { ok: true };
+    }));
+
+    // ===== حالة البوت (Presence): حالات دوّارة + مرآة نشاط الملكيين =====
+    api.get('/presence', h(async (g) => {
+        await g.channels.fetch().catch(() => {});
+        return {
+            config: presence.get(g.id),
+            state: presence.status(),
+            channels: [...g.channels.cache.values()].filter(c => c.isTextBased && c.isTextBased() && !c.isThread?.())
+                .map(c => ({ id: c.id, name: '# ' + c.name }))
+        };
+    }));
+    api.post('/presence/save', h(async (g, b, req) => {
+        const cfg = presence.set(g.id, b);
+        presence.restartTimer();
+        presence.apply();
+        note(req, `تعديل حالة البوت (${cfg.enabled ? 'مفعلة' : 'معطلة'} · ${cfg.items.length} حالة · تبديل كل ${cfg.intervalSec} ثانية)`);
+        return { ok: true, config: cfg, state: presence.status() };
+    }));
+    api.post('/presence/apply', h(async (g, b, req) => {
+        const st = presence.next();
+        note(req, 'تطبيق حالة البوت فوراً');
+        return { ok: true, state: st };
+    }));
+    api.post('/presence/reset', h(async (g, b, req) => {
+        presence.reset(g.id);
+        presence.restartTimer();
+        presence.apply();
+        note(req, 'رجوع حالة البوت للافتراضي');
+        return { ok: true, config: presence.get(g.id), state: presence.status() };
     }));
 
     // ===== المستويات والرتب: معدلات الخبرة + المتصدرين + تعديل XP أي عضو =====

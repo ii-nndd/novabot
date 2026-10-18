@@ -23,6 +23,7 @@ const selfroles = require('./selfroles');
 const jail = require('./jail');
 const trap = require('./trap');
 const guard = require('./guard');
+const presence = require('./presence');
 const colors = require('./colors');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
@@ -79,6 +80,8 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,  // للترحيب وصفحة الأعضاء: فعّل Server Members Intent في موقع المطورين
+        // 🎮 مرآة نشاط الملكيين (اختياري): فعّل Presence Intent في موقع المطورين — ولو مو مفعّل البوت يشتغل عادي بدونه
+        GatewayIntentBits.GuildPresences,
         // 🛡️ درع نوفا: لاستقبال أحداث الحظر (GuildBans = GuildModeration في v14)
         (GatewayIntentBits.GuildModeration ?? GatewayIntentBits.GuildBans)
     ].filter(i => i !== undefined)
@@ -293,6 +296,7 @@ async function onClientReady() {
         jail.init(client);
         trap.init(client, CONFIG);
         guard.init(client, CONFIG);
+        presence.init(client, CONFIG);
         colors.init(client, CONFIG);
     }
 
@@ -873,7 +877,7 @@ tsfunnel.start(PORT)
 
 // تشغيل البوت. لو Server Members Intent مو مفعل نشغله بدونه (الترحيب وصفحة الأعضاء يتعطلون بس)
 // ولو فشل التشغيل (شبكة/توكن) يعيد المحاولة تلقائياً بتباعد متزايد بدل ما يوقف نهائياً
-let intentFallbackDone = false;
+let intentFallbackStep = 0;   // 0 = كل شي · 1 = بلا Presence · 2 = بلا Presence وبلا Members
 async function bootBot(attempt = 1) {
     try {
         await client.login(process.env.DISCORD_TOKEN);
@@ -883,11 +887,17 @@ async function bootBot(attempt = 1) {
     } catch (err) {
         const intentsIssue = err.code === 'DisallowedIntents'
             || /disallowed intents|privileged intent/i.test(String(err.message));
-        if (intentsIssue && !intentFallbackDone) {
-            intentFallbackDone = true;
-            console.error('⚠️ Server Members Intent مو مفعل في موقع المطورين، أشغل البوت بدونه (الترحيب وصفحة الأعضاء معطلين)');
+        if (intentsIssue && intentFallbackStep < 2) {
+            intentFallbackStep++;
             try { client.destroy(); } catch {}
-            client.options.intents.remove(GatewayIntentBits.GuildMembers);
+            if (intentFallbackStep === 1 && client.options.intents.has(GatewayIntentBits.GuildPresences)) {
+                console.error('⚠️ Presence Intent مو مفعل في موقع المطورين — أطفئ «مرآة نشاط الملكيين» (الحالات الدوّارة تشتغل عادي)');
+                client.options.intents.remove(GatewayIntentBits.GuildPresences);
+            } else {
+                intentFallbackStep = 2;
+                console.error('⚠️ Server Members Intent مو مفعل في موقع المطورين، أشغل البوت بدونه (الترحيب وصفحة الأعضاء معطلين)');
+                client.options.intents.remove(GatewayIntentBits.GuildMembers);
+            }
             return bootBot(attempt);
         }
         console.error('❌ فشل تشغيل البوت:', err.message);
