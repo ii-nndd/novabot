@@ -115,34 +115,45 @@ const commands = [
 
 const NAMES = ['يومي', 'رصيد', 'تحويل', 'المتجر', 'شراء', 'متجر_اضافة', 'متجر_حذف'];
 
+// استلام الراتب اليومي — يستخدمه أمر /يومي وخيار «الراتب اليومي» بلوحة التحكم (hub.js).
+// eph=true يعني الرد مخفي للعضو نفسه (لوحة التحكم ما تبغى تزعج الروم).
+async function claimDaily(i, eph = false) {
+    const g = i.guild.id;
+    const D = daily();
+    const cur = get(g, i.user.id);
+    const left = D.cdHours * 3600_000 - (Date.now() - cur.lastDaily);
+    if (left > 0) {
+        const h = Math.max(1, Math.ceil(left / 3600_000));
+        return i.reply({ content: `⏳ خذيت راتبك اليوم! رجع بعد حوالي **${h}** ساعة.`, flags: EPH });
+    }
+    const amount = D.min + Math.floor(Math.random() * (D.max - D.min + 1));
+    const doc = save(g, i.user.id, { balance: cur.balance + amount, lastDaily: Date.now() });
+    const txt = `${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`;
+    // بطاقة الراتب المصممة (نفس هوية نوفا) — نأجّل الرد لأن الرسم + الصورة ياخذون وقت
+    if (art.available()) {
+        await i.deferReply(eph ? { flags: EPH } : undefined).catch(() => {});
+        const png = await art.guard(art.dailyCard({
+            avatarURL: i.user.displayAvatarURL({ extension: 'png', size: 256 }),
+            name: i.member ? i.member.displayName : i.user.username,
+            amount, balance: doc.balance, cdHours: D.cdHours
+        }), 6000, 'بطاقة الراتب اليومي');
+        if (png) return i.editReply({ files: [new AttachmentBuilder(png, { name: 'daily.png' })] }).catch(() => {});
+        return i.editReply(txt).catch(() => {});
+    }
+    if (eph) {
+        await i.deferReply({ flags: EPH }).catch(() => {});
+        return i.editReply(txt).catch(() => {});
+    }
+    return i.reply(txt);
+}
+
 async function handle(i, ctx) {
     if (!NAMES.includes(i.commandName)) return false;
     const g = i.guild.id;
     try {
         switch (i.commandName) {
-            case 'يومي': {
-                const D = daily();
-                const cur = get(g, i.user.id);
-                const left = D.cdHours * 3600_000 - (Date.now() - cur.lastDaily);
-                if (left > 0) {
-                    const h = Math.max(1, Math.ceil(left / 3600_000));
-                    return i.reply({ content: `⏳ خذيت راتبك اليوم! رجع بعد حوالي **${h}** ساعة.`, flags: EPH });
-                }
-                const amount = D.min + Math.floor(Math.random() * (D.max - D.min + 1));
-                const doc = save(g, i.user.id, { balance: cur.balance + amount, lastDaily: Date.now() });
-                // بطاقة الراتب المصممة (نفس هوية نوفا) — نأجّل الرد لأن الرسم + الصورة ياخذون وقت
-                if (art.available()) {
-                    await i.deferReply().catch(() => {});
-                    const png = await art.guard(art.dailyCard({
-                        avatarURL: i.user.displayAvatarURL({ extension: 'png', size: 256 }),
-                        name: i.member ? i.member.displayName : i.user.username,
-                        amount, balance: doc.balance, cdHours: D.cdHours
-                    }), 6000, 'بطاقة الراتب اليومي');
-                    if (png) return i.editReply({ files: [new AttachmentBuilder(png, { name: 'daily.png' })] }).catch(() => {});
-                    return i.editReply(`${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`).catch(() => {});
-                }
-                return i.reply(`${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`);
-            }
+            case 'يومي':
+                return claimDaily(i);
             case 'رصيد': {
                 const u = i.options.getUser('عضو') || i.user;
                 const doc = get(g, u.id);
@@ -203,7 +214,7 @@ async function handle(i, ctx) {
 }
 
 module.exports = {
-    commands, handle, get, addBalance,
+    commands, handle, claimDaily, get, addBalance,
     daily, setDaily, balances, setBalance,
     shopFor, shopAdd, shopUpdate, shopRemove, shopMove
 };

@@ -206,4 +206,4 @@ async function handle(i, ctx) {
     return true;
 }
 
-module.exports = { commands, handle, handleButton, get, set, panelMessage, openCount };
+module.exports = { commands, handle, handleButton, get, set, panelMessage, openTicket, openCount };

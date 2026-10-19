@@ -998,8 +998,76 @@ async function giveawayCard({ prize, winners = 1, endsAt, by, entrants = 0 }) {
     return cv.toBuffer('image/png');
 }
 
+// ===== ١٠) بانر «لوحة التحكم» — صورة رسالة البانل (بانر كبير + شريط الخيارات) =====
+// نفس فكرة بانرات السيرفرات: عنوان ضخم + قائمة الخيارات ككبسولات مرقّمة + سهم.
+function fitText(ctx, s, maxW, size, weight) {
+    ctx.font = (weight || '500') + ' ' + size + 'px ' + FONT_STACK;
+    let t = san(s);
+    if (ctx.measureText(t).width <= maxW) return t;
+    while (t.length > 1 && ctx.measureText(t + '...').width > maxW) t = t.slice(0, -1);
+    return t + '...';
+}
+
+async function panelCard({ title = 'لوحة التحكم', subtitle = 'CONTROL PANEL', server, items = [], footerText } = {}) {
+    const W = 1024, PAD = 52, X = W - PAD;
+    const list = (items || []).filter(Boolean).slice(0, 8);
+    const H = list.length ? 660 : 516;
+    const cv = canvasLib.createCanvas(W, H);
+    const ctx = cv.getContext('2d');
+    roundRect(ctx, 0, 0, W, H, 30); ctx.clip();
+    frame(ctx, W, H, { seed: 24 });
+    await watermark(ctx, W, H);
+
+    // زخرفة على اليسار: حلقتان ذهبيتان + نجمة نوفا خفيفة
+    const cx = 262, cy = H / 2 + 6;
+    ctx.save(); ctx.globalAlpha = .55;
+    ctx.beginPath(); ctx.arc(cx, cy, 170, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,200,90,.15)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 200, Math.PI * .12, Math.PI * .88);
+    ctx.strokeStyle = 'rgba(255,200,90,.10)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.restore();
+    novaMark(ctx, cx, cy, 200, .08);
+
+    await brand(ctx, W, { server, y: 76 });
+
+    // العنوان الكبير + السطر الإنجليزي + خط ذهبي
+    const yT = list.length ? 246 : 236;
+    goldText(ctx, nm(title, 'لوحة التحكم', 26), X, yT, 92, 'right', { glow: 30 });
+    T(ctx, nm(subtitle, 'CONTROL PANEL', 24).toUpperCase(), X, yT + 46, { size: 27, weight: '600', color: 'rgba(255,200,90,.60)', align: 'right', dir: 'ltr' });
+    const lg = ctx.createLinearGradient(X - 430, 0, X, 0);
+    lg.addColorStop(0, 'rgba(255,200,90,0)'); lg.addColorStop(1, 'rgba(255,200,90,.8)');
+    ctx.fillStyle = lg; ctx.fillRect(X - 430, yT + 66, 430, 3);
+
+    // كبسولات الخيارات: عمودين × ٤
+    if (list.length) {
+        const colW = (W - PAD * 2 - 26) / 2, y0 = yT + 94;
+        list.forEach((it, k) => {
+            const col = k % 2, r = Math.floor(k / 2);
+            const x = X - colW - col * (colW + 26);
+            const y = y0 + r * 62;
+            glass(ctx, x, y, colW, 50, 24, 'rgba(255,255,255,.05)', 'rgba(255,200,90,.16)');
+            // رقم دائري على اليمين
+            ctx.beginPath(); ctx.arc(x + colW - 26, y + 25, 15, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,200,90,.15)'; ctx.fill();
+            ctx.strokeStyle = 'rgba(255,200,90,.38)'; ctx.lineWidth = 1.5; ctx.stroke();
+            T(ctx, String(k + 1), x + colW - 26, y + 34, { size: 20, weight: '600', color: C.gold, align: 'center', dir: 'ltr' });
+            // نص الخيار
+            T(ctx, fitText(ctx, it, colW - 104, 23), x + colW - 52, y + 32, { size: 23, color: C.txt, align: 'right' });
+            // سهم على اليسار ❯
+            const ax = x + 22, ay = y + 25;
+            ctx.beginPath();
+            ctx.moveTo(ax, ay - 8); ctx.lineTo(ax + 7, ay); ctx.lineTo(ax, ay + 8);
+            ctx.strokeStyle = 'rgba(255,200,90,.6)'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.stroke();
+        });
+    }
+
+    footer(ctx, W, H, footerText || 'اضغط على الخيار اللي تبية من القائمة تحت');
+    return cv.toBuffer('image/png');
+}
+
 module.exports = {
     available, FONT_PATH, FAMILY, FONT_STACK, C, san, nm, nf, guard, sysFonts,
     welcomeCard, leaveCard, gameCard, winCard, dailyCard, levelUpCard, noticeCard, giveawayCard,
-    flagImage, flagCode, loadImg
+    panelCard, flagImage, flagCode, loadImg
 };

@@ -24,6 +24,7 @@ const jail = require('./jail');
 const trap = require('./trap');
 const guard = require('./guard');
 const presence = require('./presence');
+const hub = require('./hub');
 const colors = require('./colors');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
@@ -270,7 +271,7 @@ const commands = [
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('ألوان').setDescription('يعيد توليد صورة الألوان ويحدّث بانل الألوان (للملكيين فقط)'),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands, hub.commands);
 
 // ====================================================================
 // 7. تشغيل البوت (جاهز للعمل + إعادة التشغيل التلقائي)
@@ -304,6 +305,7 @@ async function onClientReady() {
     setOnline();
     connectToVoice();
     colors.ensure(client, CONFIG);   // نتأكد إن بانل الألوان موجود ومحدّث
+    hub.ensure(client, CONFIG);      // 🎛️ نتأكد لوحة التحكم موجودة ومحدّثة
 }
 client.on('clientReady', onClientReady);
 
@@ -331,7 +333,13 @@ client.on('interactionCreate', async (interaction) => {
     }
     // قائمة اختيار لون السيرفر (StringSelectMenu) — مستقلة عن باقي الأنظمة
     if (interaction.isStringSelectMenu()) {
+        if (await hub.handleSelect(interaction, { getTier, CONFIG, pick })) return;   // 🎛️ لوحة التحكم
         if (await colors.handleSelect(interaction)) return;
+        return;
+    }
+    // ✉️ نافذة كتابة (رسالة العضو للإدارة من لوحة التحكم)
+    if (interaction.isModalSubmit()) {
+        if (await hub.handleModal(interaction, { getTier, CONFIG, pick })) return;
         return;
     }
     if (!interaction.isChatInputCommand()) return;
@@ -345,6 +353,7 @@ client.on('interactionCreate', async (interaction) => {
     if (await levels.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await economy.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await hub.handle(interaction, { getTier, CONFIG, pick })) return;   // 🎛️ /لوحة_تحكم
     if (await giveaway.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await selfroles.handle(interaction, { getTier, CONFIG, pick })) return;
 

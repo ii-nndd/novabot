@@ -11,6 +11,7 @@ const jail = require('./jail');
 const trap = require('./trap');
 const guard = require('./guard');
 const presence = require('./presence');
+const hub = require('./hub');
 const points = require('./points');
 const levels = require('./levels');
 const botcontrol = require('./botcontrol');
@@ -46,7 +47,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.11';
+const BUILD = '2026-10-18.12';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -298,7 +299,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -753,6 +754,90 @@ m.appendChild(row([
  el('button',{class:'btn',text:'💾 حفظ كل الإعدادات',on:{click:function(){go(api('presence/save',body()),'انحفظت حالة البوت ✅','presence')}}}),
  el('button',{class:'b2',text:'🎮 طبّق الحالة الآن',on:{click:function(){go(api('presence/apply',{}),'انطبقت الحالة 🎮','presence')}}}),
  el('button',{class:'b2',text:'🔄 رجوع الافتراضي',on:{click:function(){if(!confirm('نرجّع حالات البوت للافتراضي؟'))return;go(api('presence/reset',{}),'رجعنا الافتراضي','presence')}}})
+]));
+})};
+// ===== 🎛️ لوحة التحكم (رسالة وحدة فيها بانر + خيارات) =====
+pages.hub=function(m){return api('hub').then(function(d){var c=d.config,st=d.state||{};
+m.appendChild(el('h1',{text:'لوحة التحكم'}));
+m.appendChild(el('div',{class:'mut',text:'لوحة زي لوحات السيرفرات الكبيرة: رسالة وحدة فيها صورة بانر مصممة بهوية نوفا + قائمة خيارات، والعضو يختار الخيار فيصير له شي فعلي (تذكرة · بطاقته · راتبه اليومي · القرعات · لونه · رتبته · القوانين · رسالة للإدارة). كل خيار مربوط بنظام حقيقي بالبوت — ما فيه شي وهمي. تقدر ترسلها بأمر /لوحة_تحكم من أي روم (للملكيين) أو من الأزرار تحت.'}));
+function fld(t,e){return el('div',{style:'margin:6px 10px 6px 0'},[el('div',{class:'mut',text:t}),e])}
+var chs=el('select',{style:'flex:1;min-width:210px'},[opt('','— اختر روم —')].concat(d.channels.map(function(x){return opt(x.id,x.name)})));chs.value=c.channelId||'';
+var cts=el('select',{style:'flex:1;min-width:210px'},[opt('','— بدون روم (تواصل بالخاص) —')].concat(d.channels.map(function(x){return opt(x.id,x.name)})));cts.value=c.contactId||'';
+var S={enabled:!!c.enabled,image:c.image!==false};
+var en=sw(S.enabled,function(v){S.enabled=v});
+var im=sw(S.image,function(v){S.image=v});
+var ti=el('input',{type:'text',placeholder:'العنوان الكبير بالبانر — مثال: لوحة التحكم',style:'flex:1;min-width:190px'});ti.value=c.title||'';
+var sub=el('input',{type:'text',placeholder:'CONTROL PANEL',style:'flex:1;min-width:150px'});sub.value=c.subtitle||'';
+var pl=el('input',{type:'text',placeholder:'نص القائمة قبل ما يفتحها العضو',style:'flex:1;min-width:210px'});pl.value=c.placeholder||'';
+var hd=el('input',{type:'text',placeholder:'عنوان الرسالة (Embed)',style:'flex:1;min-width:210px'});hd.value=c.heading||'';
+var de=el('textarea',{placeholder:'وصف الرسالة'});de.value=c.desc||'';
+var co=el('input',{type:'color',value:'#'+(c.color||'b3121e')});
+var ru=el('textarea',{style:'min-height:120px',placeholder:'نص القوانين (يطلع لمن يضغط خيار القوانين)'});ru.value=c.rules||'';
+var sr=el('textarea',{style:'min-height:90px',placeholder:'آيدي الرتبة : اسم الزر — كل رتبة بسطر\\nمثال:\\n123456789012345678 : 🎮 قيمر'});sr.value=c.selfRolesText||'';
+var opts=(c.options||[]).map(function(o){return{id:o.id,on:o.on!==false,emoji:o.emoji||'',label:String(o.label||''),desc:String(o.desc||'')}});
+var box=el('div',{});
+function render(){
+ box.textContent='';
+ opts.forEach(function(o,i){
+  var t=sw(o.on!==false,function(v){o.on=v});
+  var ei=el('input',{type:'text',style:'width:64px',placeholder:'إيموجي'});ei.value=o.emoji;ei.oninput=function(){o.emoji=ei.value};
+  var li=el('input',{type:'text',style:'flex:1;min-width:180px'});li.value=o.label;li.oninput=function(){o.label=li.value};
+  var di=el('input',{type:'text',style:'flex:1;min-width:170px',placeholder:'وصف صغير تحت الاسم'});di.value=o.desc;di.oninput=function(){o.desc=di.value};
+  box.appendChild(el('div',{class:'row',style:'display:flex;gap:6px;align-items:center;margin:6px 0'},[
+   t,ei,li,di,
+   el('button',{class:'b2',text:'▲',on:{click:function(){if(i>0){var x=opts[i-1];opts[i-1]=opts[i];opts[i]=x;render()}}}}),
+   el('button',{class:'b2',text:'▼',on:{click:function(){if(i<opts.length-1){var x=opts[i+1];opts[i+1]=opts[i];opts[i]=x;render()}}}})
+  ]));
+ });
+ if(!opts.length)box.appendChild(el('div',{class:'mut',text:'ما فيه خيارات — اضغط «🔄 رجوع الافتراضي».'}));
+}
+render();
+function body(){var o={enabled:S.enabled,image:S.image,channelId:chs.value,contactId:cts.value,title:ti.value,subtitle:sub.value,placeholder:pl.value,heading:hd.value,desc:de.value,color:co.value.replace('#',''),rules:ru.value,selfRolesText:sr.value};
+ o.options=opts.map(function(x){return{id:x.id,on:x.on!==false,emoji:x.emoji,label:x.label,desc:x.desc}});return o}
+var live=opts.filter(function(o){return o.on!==false}).length;
+m.appendChild(card('حالة اللوحة',el('div',{},[
+ el('div',{class:'row'},[
+  el('span',{class:'tag '+(st.enabled?'on':'off'),text:st.enabled?'✅ مفعّلة':'⛔ مطفية'}),
+  el('span',{class:'tag',text:'الروم: '+(c.channelId?('<#'+c.channelId+'>'):'ما تحدد')}),
+  el('span',{class:'tag',text:c.messageId?'الرسالة مرسلة ومربوطة ✅':'ما فيه رسالة مرسلة'}),
+  el('span',{class:'tag',text:'خيارات شغالة: '+live})
+ ]),
+ el('div',{class:'mut',style:'margin-top:8px',text:'لما تكون «مفعّلة» البوت يتأكد من الرسالة عند كل إقلاع ويحدّثها، ولو انحذفت يرسلها من جديد.'}),
+ st.link?el('div',{class:'mut',style:'margin-top:6px'},[el('a',{href:st.link,target:'_blank',text:'🔗 افتح رسالة اللوحة بديسكورد'})]):null,
+ el('img',{src:'/dashboard/api/hub/image.png?t='+Date.now(),style:'max-width:100%;border-radius:14px;margin:12px 0;border:1px solid #2a2836;background:#12101a'})
+])));
+m.appendChild(card('الإعدادات الأساسية',el('div',{},[
+ el('div',{class:'row',style:'margin:10px 0'},[en,el('span',{text:'تفعيل اللوحة (تحديث تلقائي + إعادة إرسال لو انحذفت)'})]),
+ el('div',{class:'row',style:'margin:10px 0'},[im,el('span',{text:'إرسال البانر المصمم كصورة (لو طفيتها تنرسل نص عادي أخف)'})]),
+ el('div',{class:'row'},[fld('روم اللوحة',chs),fld('روم تواصل الإدارة (اختياري)',cts),fld('لون الرسالة',co)]),
+ el('div',{class:'row'},[fld('العنوان بالبانر',ti),fld('السطر الإنجليزي',sub)]),
+ el('div',{class:'row'},[fld('عنوان الرسالة',hd)]),
+ el('div',{class:'row'},[fld('نص القائمة',pl)]),
+ el('div',{style:'margin:10px 0'},[el('div',{class:'mut',text:'وصف الرسالة'}),de])
+])));
+m.appendChild(card('الخيارات (شكلها بالضبط مثل ما بتنزل بالرسالة)',el('div',{},[
+ el('div',{class:'mut',text:'كل سطر = خيار بالقائمة: المفتاح يفعّله/يطفيه، الإيموجي أول مربع، الاسم، والوصف اللي يطلع تحت الاسم. ▲▼ يغيّرون الترتيب.'}),
+ box,
+ el('div',{class:'row'},[
+  el('button',{class:'b2',text:'➕ رجوع للخيارات الافتراضية',on:{click:function(){opts=(d.defaults.options||[]).map(function(o){return{id:o.id,on:o.on!==false,emoji:o.emoji||'',label:o.label||'',desc:o.desc||''}});render();toast('رجعت الخيارات للافتراضي — لا تنسى الحفظ 💾')}}}),
+  el('button',{class:'b2',text:'✅ تفعيل الكل',on:{click:function(){opts.forEach(function(o){o.on=true});render()}}}),
+  el('button',{class:'b2',text:'⛔ إطفاء الكل',on:{click:function(){opts.forEach(function(o){o.on=false});render()}}})
+ ])
+])));
+m.appendChild(card('نص القوانين 📜',el('div',{},[
+ el('div',{class:'mut',text:'يطلع للعضو لما يختار خيار القوانين (رد خاص له هو فقط).'}),
+ ru
+])));
+m.appendChild(card('الرتب الذاتية 📢',el('div',{},[
+ el('div',{class:'mut',text:'اكتب «آيدي الرتبة : اسم الزر» كل رتبة بسطر، والعضو يضغط الزر فياخذ الرتبة أو تنشال عنه. (نفس أزرار /رتب_لوحة)'}),
+ sr
+])));
+m.appendChild(row([
+ el('button',{class:'btn',text:'💾 حفظ كل الإعدادات',on:{click:function(){go(api('hub/save',body()),'انحفظت لوحة التحكم ✅','hub')}}}),
+ el('button',{class:'b2',text:'📨 إرسال/تحديث اللوحة',on:{click:function(){if(!chs.value)return toast('حدّد الروم واحفظ أول',1);go(api('hub/send',{resend:false}),'انرسلت/انحدّثت اللوحة ✅','hub')}}}),
+ el('button',{class:'b2',text:'📨 رسالة جديدة (يحذف القديمة)',on:{click:function(){if(!chs.value)return toast('حدّد الروم واحفظ أول',1);if(!confirm('نرسل لوحة جديدة ونحذف الرسالة القديمة؟'))return;go(api('hub/send',{resend:true}),'انرسلت لوحة جديدة ✅','hub')}}}),
+ el('button',{class:'b2',text:'🖼️ تحديث معاينة البانر',on:{click:function(){show('hub');toast('تحدّثت المعاينة 🖼️')}}}),
+ el('button',{class:'b2',text:'🔄 رجوع الافتراضي',on:{click:function(){if(!confirm('نرجّع لوحة التحكم للافتراضي (وتنطفي)؟'))return;go(api('hub/reset',{}),'رجعنا الافتراضي','hub')}}})
 ]));
 })};
 // ===== الحماية (درع نوفا) =====
@@ -1744,6 +1829,44 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         presence.apply();
         note(req, 'رجوع حالة البوت للافتراضي');
         return { ok: true, config: presence.get(g.id), state: presence.status() };
+    }));
+
+    // ===== 🎛️ لوحة التحكم: رسالة وحدة (بانر + قائمة خيارات) =====
+    api.get('/hub', h(async (g) => {
+        await g.channels.fetch().catch(() => {});
+        return {
+            config: hub.get(g.id),
+            state: hub.state(g.id),
+            catalog: hub.CATALOG,
+            defaults: hub.DEF,
+            channels: [...g.channels.cache.values()].filter(c => c.isTextBased && c.isTextBased() && !c.isThread?.())
+                .map(c => ({ id: c.id, name: '# ' + c.name }))
+        };
+    }));
+    api.get('/hub/image.png', async (req, res) => {
+        try {
+            const g = client.guilds.cache.get(CONFIG.GUILD_ID);
+            if (!g) return res.status(503).end();
+            const buf = await hub.renderImage(g);
+            res.set('Content-Type', 'image/png').set('Cache-Control', 'no-store').send(buf);
+        } catch (e) {
+            res.status(400).json({ error: String(e.message || 'تعذر توليد صورة اللوحة').slice(0, 150) });
+        }
+    });
+    api.post('/hub/save', h(async (g, b, req) => {
+        const cfg = hub.set(g.id, b);
+        note(req, `تعديل لوحة التحكم (${cfg.enabled ? 'مفعّلة' : 'مطفية'} · ${cfg.options.filter(o => o.on).length} خيار)`);
+        return { ok: true, config: cfg, state: hub.state(g.id) };
+    }));
+    api.post('/hub/send', h(async (g, b, req) => {
+        const r = await hub.send(g, g.id, { resend: b.resend === true });
+        note(req, r.edited ? 'تحديث رسالة لوحة التحكم' : 'إرسال رسالة لوحة التحكم');
+        return r;
+    }));
+    api.post('/hub/reset', h(async (g, b, req) => {
+        hub.reset(g.id);
+        note(req, 'رجوع لوحة التحكم للافتراضي');
+        return { ok: true, config: hub.get(g.id), state: hub.state(g.id) };
     }));
 
     // ===== المستويات والرتب: معدلات الخبرة + المتصدرين + تعديل XP أي عضو =====
