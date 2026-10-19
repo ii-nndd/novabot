@@ -192,10 +192,19 @@ function bannerArgs(guild, cfg) {
     };
 }
 
-// يرجّع البانر PNG (للمعاينة بالداشبورد)
+// ينادي رسم البانر بأمان: ما يرمي ولا يعلّق حتى لو نسخة art قديمة ما فيها panelCard
+// (هذا اللي كان يطلع «art.panelCard is not a function» ويوقف الرسالة كلها)
+function drawBanner(guild, cfg) {
+    if (!art || typeof art.panelCard !== 'function') return Promise.resolve(null);
+    const p = Promise.resolve().then(() => art.panelCard(bannerArgs(guild, cfg)));
+    if (typeof art.guard === 'function') return art.guard(p, 8000, 'بانر لوحة التحكم');
+    return p.catch(() => null);
+}
+
+// يرجّع البانر PNG (للمعاينة بالداشبورد) — أو null لو الرسم مو متاح
 async function renderImage(guild) {
     const cfg = get(guild ? guild.id : '');
-    return art.panelCard(bannerArgs(guild, cfg));
+    return drawBanner(guild, cfg);
 }
 
 async function payload(guild, cfg, gid) {
@@ -207,9 +216,9 @@ async function payload(guild, cfg, gid) {
     e.setFooter({ text: 'سيرفر نوفا · اضغط على الخيار اللي تبية 👇' });
     const out = { embeds: [e], components: [] };
 
-    // البانر المصمم — لو فشل أو تأخّر نكمل بدونه
+    // البانر المصمم — لو فشل أو تأخّر أو الرسم مو متاح نكمل بدونه
     if (cfg.image && art.available()) {
-        const png = await art.guard(art.panelCard(bannerArgs(guild, cfg)), 8000, 'بانر لوحة التحكم');
+        const png = await drawBanner(guild, cfg);
         if (png) {
             e.setImage('attachment://hub.png');
             out.files = [new AttachmentBuilder(png, { name: 'hub.png' })];

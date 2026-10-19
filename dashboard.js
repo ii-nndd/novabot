@@ -47,7 +47,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.12';
+const BUILD = '2026-10-18.13';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -804,7 +804,8 @@ m.appendChild(card('حالة اللوحة',el('div',{},[
  ]),
  el('div',{class:'mut',style:'margin-top:8px',text:'لما تكون «مفعّلة» البوت يتأكد من الرسالة عند كل إقلاع ويحدّثها، ولو انحذفت يرسلها من جديد.'}),
  st.link?el('div',{class:'mut',style:'margin-top:6px'},[el('a',{href:st.link,target:'_blank',text:'🔗 افتح رسالة اللوحة بديسكورد'})]):null,
- el('img',{src:'/dashboard/api/hub/image.png?t='+Date.now(),style:'max-width:100%;border-radius:14px;margin:12px 0;border:1px solid #2a2836;background:#12101a'})
+ el('img',{src:'/dashboard/api/hub/image.png?t='+Date.now(),style:'max-width:100%;border-radius:14px;margin:12px 0;border:1px solid #2a2836;background:#12101a',on:{error:function(){this.style.display='none';if(this.nextSibling)this.nextSibling.style.display='block'}}}),
+ el('div',{class:'mut',style:'display:none;margin:8px 0;color:#ff9b9b',text:'⚠️ ما قدرت أعرض البانر — تأكد أن ملف art.js المحدّث (فيه panelCard) مرفوع للسيرفر.'})
 ])));
 m.appendChild(card('الإعدادات الأساسية',el('div',{},[
  el('div',{class:'row',style:'margin:10px 0'},[en,el('span',{text:'تفعيل اللوحة (تحديث تلقائي + إعادة إرسال لو انحذفت)'})]),
@@ -1848,6 +1849,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             const g = client.guilds.cache.get(CONFIG.GUILD_ID);
             if (!g) return res.status(503).end();
             const buf = await hub.renderImage(g);
+            if (!buf) return res.status(400).json({ error: 'تعذر رسم بانر اللوحة (تأكد أن ملف art.js محدّث فيه panelCard)' });
             res.set('Content-Type', 'image/png').set('Cache-Control', 'no-store').send(buf);
         } catch (e) {
             res.status(400).json({ error: String(e.message || 'تعذر توليد صورة اللوحة').slice(0, 150) });
