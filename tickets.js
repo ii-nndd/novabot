@@ -5,6 +5,7 @@ const {
     PermissionFlagsBits: P, ChannelType, AttachmentBuilder, MessageFlags
 } = require('discord.js');
 const store = require('./store');
+const access = require('./access');
 
 const EPH = MessageFlags.Ephemeral;
 const DEF = {
@@ -49,11 +50,17 @@ const commands = [
     new SlashCommandBuilder().setName('تذكرة_اغلاق').setDescription('إغلاق التذكرة الحالية').setDMPermission(false)
 ].map(c => c.toJSON());
 
-// الإداري = ارثر/إيدا، أو صاحب رتبة الدعم، أو الرتبة الملكية
+// الإداري: بسيرفرنا = ارثر/إيدا أو رتبة الدعم أو الرتبة الملكية
+//          بأي سيرفر ثاني = صاحب السيرفر أو اللي أعطاه صلاحية الدخول أو رتبة الدعم المحددة
 function isStaff(member, cfg, CONFIG) {
     if (!member) return false;
-    if (member.id === CONFIG.ARTHUR_ID || member.id === CONFIG.SPECIAL_USER_ID) return true;
-    return member.roles.cache.has(CONFIG.ROYAL_ROLE_ID) || (cfg.staffRoleId && member.roles.cache.has(cfg.staffRoleId));
+    const g = member.guild;
+    const staffRole = cfg.staffRoleId && member.roles.cache.has(cfg.staffRoleId);
+    if (g && access.isNova(g.id, CONFIG)) {
+        if (member.id === CONFIG.ARTHUR_ID || member.id === CONFIG.SPECIAL_USER_ID) return true;
+        return member.roles.cache.has(CONFIG.ROYAL_ROLE_ID) || staffRole;
+    }
+    return staffRole || access.isRoyal(g, member, CONFIG);
 }
 
 async function openTicket(i, CONFIG) {
@@ -76,8 +83,14 @@ async function openTicket(i, CONFIG) {
         { id: i.user.id, allow },
         { id: i.client.user.id, allow: [...allow, P.ManageChannels] }
     ];
-    for (const rid of new Set([cfg.staffRoleId, CONFIG.ROYAL_ROLE_ID])) {
+    for (const rid of new Set([cfg.staffRoleId, access.isNova(g.id, CONFIG) ? CONFIG.ROYAL_ROLE_ID : ''])) {
         if (rid && g.roles.cache.has(rid)) overwrites.push({ id: rid, allow });
+    }
+    // 🌐 أي سيرفر ثاني: نضيف صاحب السيرفر والمسؤولين المصرّح لهم (عشان يشفون التذكرة)
+    if (!access.isNova(g.id, CONFIG)) {
+        for (const uid of access.royalIds(g, CONFIG)) {
+            if (uid && g.members.cache.has(uid)) overwrites.push({ id: uid, allow });
+        }
     }
     const parent = cfg.categoryId && g.channels.cache.get(cfg.categoryId);
     const ch = await g.channels.create({

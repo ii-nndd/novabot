@@ -1,5 +1,6 @@
 // روم الفخ: أي حد يكتب فيه (غير المستثنيين بالآيدي) ينحظر تلقائي فوراً. ضد بوتات السبام/الهاك اللي تكتب بكل روم تشوفه.
 const store = require('./store');
+const access = require('./access');
 
 const DEF = { enabled: false, channelId: '', exemptIds: [] };
 
@@ -24,10 +25,11 @@ function init(client, CONFIG) {
             if (!cfg.enabled || !cfg.channelId || message.channel.id !== cfg.channelId) return;
 
             const uid = message.author.id;
-            if (uid === CONFIG.ARTHUR_ID || uid === CONFIG.SPECIAL_USER_ID) return;
             if (cfg.exemptIds.includes(uid)) return;
             const member = message.member;
-            if (member && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) return;
+            // 🌐 مستثنى: صاحب السيرفر · المسؤولين · الرتبة الملكية (بسيرفرنا) — عشان ما ينحظر بالغلط
+            if (message.guild.ownerId === uid) return;
+            if (member && access.isRoyal(message.guild, member, CONFIG)) return;
 
             await message.delete().catch(() => {});
             // حظر نهائي (بدون مدة) لأي شخص يكتب أي حرف برّوم الفخ

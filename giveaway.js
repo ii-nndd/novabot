@@ -45,7 +45,7 @@ async function endGiveaway(client, messageId) {
 function embedFor(prize, winners, endsAt, by, entrants = 0) {
     return new EmbedBuilder().setColor(0xb3121e).setTitle(`🎉 قرعة: ${prize}`)
         .setDescription(`اضغط الزر عشان تدخل القرعة!\nعدد الفائزين: **${winners}**\nالمتسابقون الآن: **${entrants}**\nتنتهي: <t:${Math.floor(endsAt / 1000)}:R>`)
-        .setFooter({ text: by ? `بدأها ${by}` : 'من لوحة نوفا' });
+        .setFooter({ text: by ? `بدأها ${by}` : 'من لوحة الإدارة' });
 }
 const joinRow = () => new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('gw_join').setLabel('🎉 دخول القرعة').setStyle(ButtonStyle.Success));
@@ -167,7 +167,7 @@ function reschedule(client) {
 }
 
 const commands = [
-    new SlashCommandBuilder().setName('قرعة_بدء').setDescription('بدء قرعة جديدة (ارثر وإيدا والرتبة الملكية)')
+    new SlashCommandBuilder().setName('قرعة_بدء').setDescription('بدء قرعة جديدة (للإدارة فقط)')
         .addStringOption(o => o.setName('الجائزة').setDescription('وش الجائزة').setRequired(true).setMaxLength(200))
         .addIntegerOption(o => o.setName('الدقائق').setDescription('مدة القرعة بالدقائق').setRequired(true).setMinValue(1).setMaxValue(10080))
         .addIntegerOption(o => o.setName('الفائزين').setDescription('عدد الفائزين (افتراضي 1)').setMinValue(1).setMaxValue(10))

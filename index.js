@@ -29,6 +29,7 @@ const colors = require('./colors');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
 const tsfunnel = require('./tsfunnel');
+const access = require('./access');
 
 // ====================================================================
 // 1. الإعدادات (عدل الآي ديهات هنا فقط)
@@ -101,6 +102,13 @@ welcome.init(client);
 function getTier(userId, member) {
     if (userId === CONFIG.ARTHUR_ID) return 'arthur';
     if (userId === CONFIG.SPECIAL_USER_ID) return 'ida';
+    const guild = member && member.guild ? member.guild : null;
+    // 🌐 أي سيرفر غير سيرفرنا: «الملكي» = صاحب السيرفر + اللي أعطاه صلاحية الدخول
+    if (guild && !access.isNova(guild.id, CONFIG)) {
+        if (access.isRoyal(guild, member, CONFIG)) return 'royal';
+        if (member && member.roles && member.roles.cache.has(CONFIG.DISRESPECT_ROLE_ID)) return 'disrespect';
+        return 'peasant';
+    }
     if (member && member.roles && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) return 'royal';
     if (member && member.roles && member.roles.cache.has(CONFIG.DISRESPECT_ROLE_ID)) return 'disrespect';
     return 'peasant';   // الافتراضي (بدون رتبة) = يعامله البوت باحترام عادي
@@ -243,10 +251,10 @@ const commands = [
     new SlashCommandBuilder().setName('تعال').setDescription('يدخل البوت الفويس (للملكيين فقط)'),
     new SlashCommandBuilder().setName('اطلع').setDescription('يطلع البوت من الفويس (للملكيين فقط)'),
     new SlashCommandBuilder().setName('حالة').setDescription('حالة البوت'),
-    new SlashCommandBuilder().setName('نكتة').setDescription('نكتة من نوفا'),
+    new SlashCommandBuilder().setName('نكتة').setDescription('نكتة من العبد'),
     new SlashCommandBuilder().setName('تنبيه').setDescription('تنبيه ملكي (للملكيين فقط)'),
     new SlashCommandBuilder().setName('فلوس').setDescription('اسأل عن راتبك'),
-    new SlashCommandBuilder().setName('سيرفر').setDescription('نبذة عن سيرفر نوفا'),
+    new SlashCommandBuilder().setName('سيرفر').setDescription('نبذة عن هذا السيرفر'),
     new SlashCommandBuilder().setName('شعر').setDescription('شعر ملكي (للملكيين فقط)'),
     new SlashCommandBuilder().setName('اكل').setDescription('اطلب أكل من العبد (للملكيين فقط)'),
     new SlashCommandBuilder().setName('بينج').setDescription('سرعة البوت'),
@@ -279,13 +287,13 @@ const commands = [
 let systemsReady = false;   // الأنظمة تُهيأ مرة واحدة فقط (عشان ما تتكرر عند إعادة الاتصال)
 async function onClientReady() {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
-    try {
-        const guild = await client.guilds.fetch(CONFIG.GUILD_ID);
-        await guild.commands.set(commands);
-        console.log('✅ تم تسجيل أوامر السلاش');
-    } catch (err) {
-        console.error('❌ فشل تسجيل الأوامر:', err.message);
+    // 🌐 الأوامر لكل سيرفر البوت فيه (مو سيرفرنا بس) — عشان أي سيرفر جديد تلاقي عنده الأوامر
+    let regd = 0;
+    for (const g of client.guilds.cache.values()) {
+        try { await g.commands.set(commands); regd++; }
+        catch (err) { console.error(`❌ فشل تسجيل الأوامر بسيرفر ${g.name || g.id}:`, err.message); }
     }
+    console.log(`✅ تم تسجيل أوامر السلاش في ${regd} سيرفر`);
 
     if (!systemsReady) {
         systemsReady = true;
@@ -309,6 +317,22 @@ async function onClientReady() {
 }
 client.on('clientReady', onClientReady);
 
+// 🌐 سيرفر جديد أضاف البوت: نجهّز له الأوامر + ننبّه صاحب المشروع يعطيه صلاحية الدخول للوحة
+client.on('guildCreate', async (guild) => {
+    console.log(`➕ دخلت سيرفر جديد: ${guild.name} (${guild.id})`);
+    try { await guild.commands.set(commands); } catch (e) { console.error('❌ فشل تسجيل أوامر السيرفر الجديد:', e.message); }
+    // رسالة ترحيب بصاحب السيرفر الجديد تشرح له إن عنده لوحة
+    try {
+        const o = await guild.fetchOwner().catch(() => null);
+        if (o) await o.send(
+            `أهلاً! أنا **العبد 🐾** بوت نوفا، صرت معكم بسيرفر **${guild.name}**.\n`
+            + `عندكم **لوحة تحكم كاملة** لكل أنظمة البوت (رتب · ترحيب · مستويات · اقتصاد · قرعات · تذاكر · حماية…).\n`
+            + `اللوحة **ما تنفتح بالرابط** — لازم إدارة نوفا تعطيك صلاحية دخول أول، وبعدها تدخل وتدير سيرفرك.\n`
+            + `📜 اكتب \`/مساعدة\` بالروم تشوف كل الأوامر.`
+        ).catch(() => {});
+    } catch { }
+});
+
 // إجبار الحالة على "أونلاين" — أساس بقاء البوت ظاهر 24/7
 function setOnline() {
     try { if (client.user) client.user.setStatus('online'); } catch {}
@@ -326,43 +350,49 @@ const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
-        if (await tickets.handleButton(interaction, { getTier, CONFIG, pick })) return;
+        if (await tickets.handleButton(interaction, { getTier, CONFIG, pick, access })) return;
         if (await giveaway.handleButton(interaction)) return;
         if (await selfroles.handleButton(interaction)) return;
         return;
     }
     // قائمة اختيار لون السيرفر (StringSelectMenu) — مستقلة عن باقي الأنظمة
     if (interaction.isStringSelectMenu()) {
-        if (await hub.handleSelect(interaction, { getTier, CONFIG, pick })) return;   // 🎛️ لوحة التحكم
+        if (await hub.handleSelect(interaction, { getTier, CONFIG, pick, access })) return;   // 🎛️ لوحة التحكم
         if (await colors.handleSelect(interaction)) return;
         return;
     }
     // ✉️ نافذة كتابة (رسالة العضو للإدارة من لوحة التحكم)
     if (interaction.isModalSubmit()) {
-        if (await hub.handleModal(interaction, { getTier, CONFIG, pick })) return;
+        if (await hub.handleModal(interaction, { getTier, CONFIG, pick, access })) return;
         return;
     }
     if (!interaction.isChatInputCommand()) return;
     // 🛡️ أمر الحماية يشتغل من أي روم (لو صار نك لازم نقدر نقفل السيرفر بأسرع وقت)
-    if (await guard.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await guard.handle(interaction, { getTier, CONFIG, pick, access })) return;
     // الرومات المسموح فيها: لو الروم معطّل أو خارج القائمة المسموحة، البوت يتجاهل الأمر تماماً
     if (interaction.guild && interaction.channel && !botcontrol.canInteract(interaction.guild.id, interaction.channel.id)) return;
-    if (await tickets.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await games.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await levels.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await economy.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await hub.handle(interaction, { getTier, CONFIG, pick })) return;   // 🎛️ /لوحة_تحكم
-    if (await giveaway.handle(interaction, { getTier, CONFIG, pick })) return;
-    if (await selfroles.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await tickets.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await games.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await points.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await levels.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await admin.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await economy.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await hub.handle(interaction, { getTier, CONFIG, pick, access })) return;   // 🎛️ /لوحة_تحكم
+    if (await giveaway.handle(interaction, { getTier, CONFIG, pick, access })) return;
+    if (await selfroles.handle(interaction, { getTier, CONFIG, pick, access })) return;
 
     const tier = getTier(interaction.user.id, interaction.member);
     const name = interaction.commandName;
     const denied = () => interaction.reply({
-        content: '❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅',
+        content: access.denyText(interaction.guild, CONFIG),
         flags: MessageFlags.Ephemeral
     });
+    // 🌐 ردود الأوامر: بسيرفرنا مثل ما هي · بأي سيرفر ثاني تُنقّى (ما نذكر ارثر/إيدا/نوفا)
+    const say = (t) => interaction.reply(
+        typeof t === 'string' ? access.clean(t, interaction.guild, CONFIG)
+            : (t && typeof t === 'object' && !Array.isArray(t) && typeof t.content === 'string'
+                ? { ...t, content: access.clean(t.content, interaction.guild, CONFIG) } : t)
+    );
 
     try {
         switch (name) {
@@ -370,66 +400,68 @@ client.on('interactionCreate', async (interaction) => {
                 if (!hasAccess(tier)) return denied();
                 botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: true });
                 connectToVoice(true);
-                return interaction.reply('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
+                return say('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
 
             case 'اطلع':
                 if (!hasAccess(tier)) return denied();
                 botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: false });
                 disconnectFromVoice();
-                return interaction.reply('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
+                return say('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
 
             case 'حالة': {
                 const e = new EmbedBuilder().setColor(0xb3121e).setDescription(rpFor('status', interaction.user.id, tier))
                     .addFields({ name: '📡 الفويس', value: isInVoice() ? 'متصل ✅' : 'غير متصل ❌', inline: true });
-                return interaction.reply({ embeds: [e] });
+                return say({ embeds: [e] });
             }
 
             case 'نكتة':
-                return interaction.reply(`🎭 ${rp('jokes')}`);
+                return say(`🎭 ${rp('jokes')}`);
 
             case 'تنبيه':
                 if (!hasAccess(tier)) return denied();
-                return interaction.reply(rp('alerts'));
+                return say(rp('alerts'));
 
             case 'فلوس':
-                return interaction.reply(
+                return say(
                     (tier === 'arthur' || tier === 'ida')
                         ? '💰 يا فخامة المقام، خزينة نوفا كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
                         : '💸 راتبك في نوفا هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂'
                 );
 
             case 'سيرفر':
-                return interaction.reply('🌟 سيرفر نوفا أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
+                return say(access.isNova(interaction.guild && interaction.guild.id, CONFIG)
+                    ? '🌟 سيرفر نوفا أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑'
+                    : '🌟 هذا السيرفر منوّر بوجودكم، وأنا العبد جاهز أخدمكم فيه! 🔥');
 
             case 'شعر':
                 if (!hasAccess(tier)) return denied();
-                return interaction.reply(rp('poems'));
+                return say(rp('poems'));
 
             case 'اكل':
                 if (!hasAccess(tier)) return denied();
-                return interaction.reply(rp('food.'+tier));
+                return say(rp('food.'+tier));
 
             case 'بينج': {
-                const sent = await interaction.reply({ content: '🏓 ...', fetchReply: true });
+                const sent = await say({ content: '🏓 ...', fetchReply: true });
                 const latency = sent.createdTimestamp - interaction.createdTimestamp;
                 return interaction.editReply(`🏓 بونغ! التأخير: **${latency}ms** | الويب سوكت: **${client.ws.ping}ms**`);
             }
 
             case 'عملة':
-                return interaction.reply(Math.random() < 0.5 ? '🪙 طلعت: **صورة**' : '🪙 طلعت: **كتابة**');
+                return say(Math.random() < 0.5 ? '🪙 طلعت: **صورة**' : '🪙 طلعت: **كتابة**');
 
             case 'نرد': {
                 const sides = interaction.options.getInteger('اوجه') ?? 6;
-                return interaction.reply(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
+                return say(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
             }
 
             case 'اختار': {
                 const opts = interaction.options.getString('خيارات')
                     .split(/[,،]/).map(s => s.trim()).filter(Boolean);
                 if (opts.length < 2) {
-                    return interaction.reply({ content: '⚠️ اكتب خيارين على الأقل وافصل بينها بفاصلة.', flags: MessageFlags.Ephemeral });
+                    return say({ content: '⚠️ اكتب خيارين على الأقل وافصل بينها بفاصلة.', flags: MessageFlags.Ephemeral });
                 }
-                return interaction.reply(`🤔 اخترت لك: **${pick(opts)}**`);
+                return say(`🤔 اخترت لك: **${pick(opts)}**`);
             }
 
             case 'حجر': {
@@ -438,13 +470,13 @@ client.on('interactionCreate', async (interaction) => {
                 let result = 'تعادل 🤝';
                 if (rpsBeats[mine] === bot) result = 'فزت! 🎉';
                 else if (rpsBeats[bot] === mine) result = 'خسرت! 😂';
-                return interaction.reply(`أنت: ${rpsNames[mine]}\nأنا: ${rpsNames[bot]}\n**${result}**`);
+                return say(`أنت: ${rpsNames[mine]}\nأنا: ${rpsNames[bot]}\n**${result}**`);
             }
 
             case 'تخمين': {
                 const guess = interaction.options.getInteger('رقم');
                 const num = 1 + Math.floor(Math.random() * 10);
-                return interaction.reply(
+                return say(
                     guess === num
                         ? `🎯 الرقم كان **${num}**، خمنت صح! 🎉`
                         : `❌ الرقم كان **${num}**، حاول مرة ثانية!`
@@ -455,15 +487,15 @@ client.on('interactionCreate', async (interaction) => {
                 const a = interaction.options.getUser('الاول');
                 const b = interaction.options.getUser('الثاني') ?? interaction.user;
                 const percent = Number((BigInt(a.id) + BigInt(b.id)) % 101n);
-                return interaction.reply(`💘 نسبة التوافق بين ${a} و ${b}: **${percent}%**`);
+                return say(`💘 نسبة التوافق بين ${a} و ${b}: **${percent}%**`);
             }
 
             case 'كرة':
-                return interaction.reply(`🔮 سؤالك: ${interaction.options.getString('سؤال')}\nالجواب: **${pick(eightBall)}**`);
+                return say(`🔮 سؤالك: ${interaction.options.getString('سؤال')}\nالجواب: **${pick(eightBall)}**`);
 
             case 'ألوان': {
                 if (!hasAccess(tier)) return denied();
-                if (!interaction.guild) return interaction.reply({ content: '⚠️ هذا الأمر داخل السيرفر فقط.', flags: MessageFlags.Ephemeral });
+                if (!interaction.guild) return say({ content: '⚠️ هذا الأمر داخل السيرفر فقط.', flags: MessageFlags.Ephemeral });
                 await interaction.deferReply();
                 try {
                     const cfg = colors.get(interaction.guild.id);
@@ -490,7 +522,7 @@ client.on('interactionCreate', async (interaction) => {
                         { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
                         { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20** / **يا عبد الألوان** (يولّد صورة الألوان ويحدّث البانل)، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
                     );
-                return interaction.reply({ embeds: [helpEmbed] });
+                return say({ embeds: [helpEmbed] });
             }
         }
     } catch (err) {
@@ -569,7 +601,7 @@ async function handleChannelToggle(message) {
 
     const tier = getTier(message.author.id, message.member);
     if (!hasAccess(tier)) {
-        await message.reply('❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅').catch(() => {});
+        await message.reply(access.denyText(message.guild, CONFIG)).catch(() => {});
         return true;
     }
     botcontrol.toggleChannel(message.guild.id, message.channel.id, on);
@@ -598,9 +630,9 @@ client.on('messageCreate', async (message) => {
     const bang = content.match(/^!\s*(rank|رتبة|رتبه|مستوى|متصدرين|المتصدرين|top|نقاطي)\s*$/i);
     if (bang) {
         const key = bang[1].toLowerCase();
-        if (key === 'rank' || key === 'رتبة' || key === 'رتبه' || key === 'مستوى') return void levels.handle(asInteraction(message, 'رتبة'), { getTier, CONFIG, pick }).catch(() => {});
-        if (key === 'نقاطي') return void points.handle(asInteraction(message, 'نقاطي'), { getTier, CONFIG, pick }).catch(() => {});
-        return void points.handle(asInteraction(message, 'المتصدرين'), { getTier, CONFIG, pick }).catch(() => {});
+        if (key === 'rank' || key === 'رتبة' || key === 'رتبه' || key === 'مستوى') return void levels.handle(asInteraction(message, 'رتبة'), { getTier, CONFIG, pick, access }).catch(() => {});
+        if (key === 'نقاطي') return void points.handle(asInteraction(message, 'نقاطي'), { getTier, CONFIG, pick, access }).catch(() => {});
+        return void points.handle(asInteraction(message, 'المتصدرين'), { getTier, CONFIG, pick, access }).catch(() => {});
     }
 
     const tokens = tokenize(content);
@@ -608,68 +640,76 @@ client.on('messageCreate', async (message) => {
     if (onCooldown(message.author.id)) return;
 
     const tier = getTier(message.author.id, message.member);
-    const access = hasAccess(tier);
+    const canAdmin = hasAccess(tier);
     const persona = getPersona(message.author.id);
-    const ctx = { getTier, CONFIG, pick };
+    const ctx = { getTier, CONFIG, pick, access };
 
     // أوامر الإدارة بالكلام الطبيعي: يا عبد <مسح/طرد/حظر/ميوت/الخ> <منشن> <مدة> <سبب>
     if (await nlcommands.handle(message, tier, ctx, admin)) return;
 
     const ntok = tokens.map(nz).filter(t => !['يا', 'عبد', 'العبد'].includes(t));
     const w = (...list) => ntok.some(t => list.includes(t));
-    const deny = () => message.reply('❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅');
+    const deny = () => say(access.denyText(message.guild, CONFIG));
+    // 🌐 كل ردود الكلام تمر من هنا: بسيرفرنا مثل ما هي، وبأي سيرفر ثاني تنقية (ما نذكر ارثر/إيدا/نوفا)
+    const say = (t) => message.reply(
+        typeof t === 'string' ? access.clean(t, message.guild, CONFIG)
+            : (t && typeof t === 'object' && typeof t.content === 'string'
+                ? { ...t, content: access.clean(t.content, message.guild, CONFIG) } : t)
+    );
 
     // الكلمات الخاصة (من اللوحة) - حسب الرتبة، وحسب الشخصية الخاصة (روان/نبض ارثر) لو موجودة
-    if (access || persona) {
+    if (canAdmin || persona) {
         const personaWords = persona ? R.get('custom.' + persona) : [];
         const matches = [...R.get('custom.' + tier), ...R.get('custom.all'), ...personaWords]
             .map(l => l.split('=>').map(x => x.trim()))
             .filter(([k, r]) => k && r && content.includes(k));
-        if (matches.length) return message.reply(pick(matches)[1]);
+        if (matches.length) return say(pick(matches)[1]);
     }
 
     // «يا عبد الألوان» / «يا عبد حدّث الألوان» / «يا عبد صورة الألوان» → يعيد توليد صورة الألوان ويحدّث البانل
     if (w('الوان', 'الالوان')) {
-        if (!access) return deny();
+        if (!canAdmin) return deny();
         try {
             const cfg = colors.get(message.guild.id);
             const r = await colors.sendPanel(message.guild, message.guild.id);
             let files;
             try { files = [{ attachment: await colors.renderImage(cfg), name: 'nova-colors.png' }]; } catch { files = undefined; }
-            return message.reply({ content: `🎨 هذا بانل الألوان محدّث بالصورة في <#${r.channelId}> ✅`, files });
+            return say({ content: `🎨 هذا بانل الألوان محدّث بالصورة في <#${r.channelId}> ✅`, files });
         } catch (e) {
-            return message.reply('⚠️ ' + (e.message || 'تعذر تحديث بانل الألوان'));
+            return say('⚠️ ' + (e.message || 'تعذر تحديث بانل الألوان'));
         }
     }
 
     // أوامر بالكلام: يا عبد + اسم الأمر
     if (w('تعال', 'ادخل', 'دخلني')) {
-        if (!access) return deny();
+        if (!canAdmin) return deny();
         botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: true }); connectToVoice(true);
-        return message.reply('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
+        return say('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
     }
     if (w('اطلع', 'اخرج')) {
-        if (!access) return deny();
+        if (!canAdmin) return deny();
         botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: false }); disconnectFromVoice();
-        return message.reply('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
+        return say('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
     }
-    if (w('تنبيه')) { if (!access) return deny(); return message.reply(rp('alerts')); }
-    if (w('نكته')) return message.reply(`🎭 ${rp('jokes')}`);
-    if (w('عمله')) return message.reply(Math.random() < 0.5 ? '🪙 طلعت: **صورة**' : '🪙 طلعت: **كتابة**');
+    if (w('تنبيه')) { if (!canAdmin) return deny(); return say(rp('alerts')); }
+    if (w('نكته')) return say(`🎭 ${rp('jokes')}`);
+    if (w('عمله')) return say(Math.random() < 0.5 ? '🪙 طلعت: **صورة**' : '🪙 طلعت: **كتابة**');
     if (w('نرد')) {
         const sides = tokens.map(Number).find(n => Number.isInteger(n) && n >= 2 && n <= 1000) || 6;
-        return message.reply(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
+        return say(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
     }
     if (w('حاله', 'status')) {
-        return message.reply(`${rpFor('status', message.author.id, tier)}\n📡 الفويس: ${isInVoice() ? 'متصل ✅' : 'غير متصل ❌'}`);
+        return say(`${rpFor('status', message.author.id, tier)}\n📡 الفويس: ${isInVoice() ? 'متصل ✅' : 'غير متصل ❌'}`);
     }
     if (w('فلوس', 'راتب')) {
-        return message.reply((tier === 'arthur' || tier === 'ida')
+        return say((tier === 'arthur' || tier === 'ida')
             ? '💰 يا فخامة المقام، خزينة نوفا كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
             : '💸 راتبك في نوفا هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂');
     }
-    if (w('سيرفر')) return message.reply('🌟 سيرفر نوفا أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
-    if (w('مساعده', 'اوامر')) return message.reply(rp('help'));
+    if (w('سيرفر')) return say(access.isNova(message.guild.id, CONFIG)
+        ? '🌟 سيرفر نوفا أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑'
+        : '🌟 هذا السيرفر منوّر بوجودكم، وأنا العبد جاهز أخدمكم فيه! 🔥');
+    if (w('مساعده', 'اوامر')) return say(rp('help'));
     for (const [word, name] of Object.entries(TEXT_GAMES)) {
         if (w(word)) return games.handle(asInteraction(message, name), ctx);
     }
@@ -683,20 +723,20 @@ client.on('messageCreate', async (message) => {
     const has = (list) => tokens.some(t => list.includes(t));
 
     // ضرب
-    if (has(HIT_WORDS)) return message.reply(rpFor('hit', message.author.id, tier));
+    if (has(HIT_WORDS)) return say(rpFor('hit', message.author.id, tier));
 
     // رتبة "بدون احترام" بس هي اللي ياخذ أسلوب البوت الفظ القديم (إلا لو عنده شخصية خاصة تطغى عليها)
     if (tier === 'disrespect' && !persona) {
-        return message.reply(has(RUDE_WORDS) ? rp('rude') : rp('greet.disrespect'));
+        return say(has(RUDE_WORDS) ? rp('rude') : rp('greet.disrespect'));
     }
 
-    if (has(FOOD_WORDS)) return message.reply(rpFor('food', message.author.id, tier));
-    if (has(THANKS_WORDS)) return message.reply(rpFor('thanks', message.author.id, tier));
-    if (has(WHERE_WORDS)) return message.reply(rpFor('where', message.author.id, tier));
-    if (has(MOVE_WORDS)) return message.reply(rpFor('move', message.author.id, tier));
-    if (has(POEM_WORDS)) return message.reply(rp('poems'));
+    if (has(FOOD_WORDS)) return say(rpFor('food', message.author.id, tier));
+    if (has(THANKS_WORDS)) return say(rpFor('thanks', message.author.id, tier));
+    if (has(WHERE_WORDS)) return say(rpFor('where', message.author.id, tier));
+    if (has(MOVE_WORDS)) return say(rpFor('move', message.author.id, tier));
+    if (has(POEM_WORDS)) return say(rp('poems'));
 
-    return message.reply(rpFor('greet', message.author.id, tier));
+    return say(rpFor('greet', message.author.id, tier));
 });
 
 // ====================================================================
@@ -724,13 +764,15 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 // ====================================================================
-// 10.5 حماية ارثر وإيدا: لو أحد كتمهم أو صمّمهم بالفويس يرجعون تلقائياً
+// 10.5 حماية المسؤولين: لو أحد كتمهم أو صمّمهم بالفويس يرجعون تلقائياً
+//      (بسيرفرنا: ارثر/إيدا/الرتبة الملكية · بأي سيرفر ثاني: صاحب السيرفر والمسؤولين)
 // ====================================================================
 const isRoyal = (id) => id === CONFIG.ARTHUR_ID || id === CONFIG.SPECIAL_USER_ID;
+const isRoyalMember = (member) => !!member && access.isRoyal(member.guild, member, CONFIG);
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     try {
-        if (!isRoyal(newState.id) || !newState.channel) return;
+        if (!newState.channel || !isRoyalMember(newState.member)) return;
         if (newState.serverMute) await newState.setMute(false, 'حماية ملكية');
         if (newState.serverDeaf) await newState.setDeaf(false, 'حماية ملكية');
     } catch {}
@@ -739,7 +781,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 // فك التايم اوت تلقائياً (يشتغل فقط لو MEMBERS_INTENT مفعّل)
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
     try {
-        if (!isRoyal(newMember.id)) return;
+        if (!isRoyalMember(newMember)) return;
         const until = newMember.communicationDisabledUntilTimestamp;
         if (until && until > Date.now()) await newMember.timeout(null, 'حماية ملكية');
     } catch {}

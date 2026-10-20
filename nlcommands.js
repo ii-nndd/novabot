@@ -70,11 +70,11 @@ async function handle(message, tier, ctx, admin) {
 
     const level = admin.LEVEL[found.name];
     if (!level) return false;
-    const owner = tier === 'arthur' || tier === 'ida';
+    const owner = (ctx.access && ctx.access.isTop) ? ctx.access.isTop(message.guild, message.member, tier, ctx.CONFIG) : (tier === 'arthur' || tier === 'ida');
     if (!(owner || (level === 'royal' && tier === 'royal'))) {
         await message.reply(level === 'owner'
-            ? '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا فقط! 👑'
-            : '⛔ هذا الأمر خاص بأهل الرتبة الملكية! 💅');
+            ? (ctx.access ? ctx.access.denyTextOwner(message.guild, ctx.CONFIG) : '⛔ هذا الأمر للإدارة فقط! 👑')
+            : (ctx.access ? ctx.access.denyTextRanks(message.guild, ctx.CONFIG) : '⛔ هذا الأمر للإدارة فقط! 💅'));
         return true;
     }
 

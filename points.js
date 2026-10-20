@@ -135,7 +135,7 @@ const commands = [
     new SlashCommandBuilder().setName('نقاطي').setDescription('اعرض نقاطك ومستواك')
         .addUserOption(o => o.setName('عضو').setDescription('عضو آخر')).setDMPermission(false),
     new SlashCommandBuilder().setName('المتصدرين').setDescription('قائمة أعلى 10 أعضاء بالنقاط').setDMPermission(false),
-    new SlashCommandBuilder().setName('نقاط_اضافة').setDescription('إضافة أو خصم نقاط (ارثر وإيدا فقط)')
+    new SlashCommandBuilder().setName('نقاط_اضافة').setDescription('إضافة أو خصم نقاط (للإدارة فقط)')
         .addUserOption(o => o.setName('عضو').setDescription('العضو').setRequired(true))
         .addIntegerOption(o => o.setName('العدد').setDescription('رقم سالب للخصم').setRequired(true).setMinValue(-100000).setMaxValue(100000))
         .setDMPermission(false)
@@ -180,8 +180,9 @@ async function handle(i, ctx) {
             await (i.deferred ? i.editReply({ embeds: [e] }) : i.reply({ embeds: [e] }));
         } else {
             const tier = ctx.getTier(i.user.id, i.member);
-            if (tier !== 'arthur' && tier !== 'ida') {
-                await i.reply({ content: '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا فقط! 👑', flags: EPH });
+            const top = ctx.access ? ctx.access.isTop(i.guild, i.member, tier, ctx.CONFIG) : (tier === 'arthur' || tier === 'ida');
+            if (!top) {
+                await i.reply({ content: ctx.access ? ctx.access.denyTextOwner(i.guild, ctx.CONFIG) : '⛔ هذا الأمر للإدارة فقط! 👑', flags: EPH });
                 return true;
             }
             const u = i.options.getUser('عضو'), n = i.options.getInteger('العدد');

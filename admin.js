@@ -291,12 +291,14 @@ async function handle(i, ctx) {
     const level = LEVEL[i.commandName];
     if (!level) return false;
     const tier = ctx.getTier(i.user.id, i.member);
-    const owner = tier === 'arthur' || tier === 'ida';
+    const owner = (ctx.access && ctx.access.isTop)
+        ? ctx.access.isTop(i.guild, i.member, tier, ctx.CONFIG)
+        : (tier === 'arthur' || tier === 'ida');
     if (!(owner || (level === 'royal' && tier === 'royal'))) {
         await i.reply({
             content: level === 'owner'
-                ? '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا فقط! 👑'
-                : '⛔ هذا الأمر خاص بأهل الرتبة الملكية! 💅',
+                ? (ctx.access ? ctx.access.denyTextOwner(i.guild, ctx.CONFIG) : '⛔ هذا الأمر للإدارة فقط! 👑')
+                : (ctx.access ? ctx.access.denyTextRanks(i.guild, ctx.CONFIG) : '⛔ هذا الأمر للإدارة فقط! 💅'),
             flags: EPH
         });
         return true;

@@ -2,6 +2,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
 const art = require('./art');
+const access = require('./access');
 
 const EPH = MessageFlags.Ephemeral;
 const COIN = '🪙';
@@ -91,6 +92,10 @@ function setBalance(gid, uid, value) {
 }
 
 const owner = (tier) => tier === 'arthur' || tier === 'ida';
+// «فوق» بهذا السيرفر: بسيرفرنا ارثر/إيدا · بأي سيرفر ثاني صاحب السيرفر/المسؤولين (بصلاحية اللوحة)
+const topHere = (i, ctx) => (ctx && ctx.access)
+    ? ctx.access.isTop(i.guild, i.member, ctx.getTier(i.user.id, i.member), ctx.CONFIG)
+    : owner(i && ctx ? ctx.getTier(i.user.id, i.member) : '');
 
 const commands = [
     new SlashCommandBuilder().setName('يومي').setDescription(`استلم ${COIN} عملتك اليومية`).setDMPermission(false),
@@ -104,11 +109,11 @@ const commands = [
     new SlashCommandBuilder().setName('شراء').setDescription('اشترِ رتبة من المتجر')
         .addIntegerOption(o => o.setName('رقم').setDescription('رقم العنصر في /المتجر').setRequired(true).setMinValue(1))
         .setDMPermission(false),
-    new SlashCommandBuilder().setName('متجر_اضافة').setDescription('إضافة رتبة للمتجر (ارثر وإيدا فقط)')
+    new SlashCommandBuilder().setName('متجر_اضافة').setDescription('إضافة رتبة للمتجر (للإدارة فقط)')
         .addRoleOption(o => o.setName('الرتبة').setDescription('الرتبة').setRequired(true))
         .addIntegerOption(o => o.setName('السعر').setDescription(`السعر بالـ${COIN}`).setRequired(true).setMinValue(1))
         .setDMPermission(false),
-    new SlashCommandBuilder().setName('متجر_حذف').setDescription('حذف عنصر من المتجر (ارثر وإيدا فقط)')
+    new SlashCommandBuilder().setName('متجر_حذف').setDescription('حذف عنصر من المتجر (للإدارة فقط)')
         .addIntegerOption(o => o.setName('رقم').setDescription('رقم العنصر').setRequired(true).setMinValue(1))
         .setDMPermission(false)
 ].map(c => c.toJSON());
@@ -189,7 +194,7 @@ async function handle(i, ctx) {
                 return i.reply(`✅ مبروك! اشتريت <@&${item.roleId}>`);
             }
             case 'متجر_اضافة': {
-                if (!owner(ctx.getTier(i.user.id, i.member))) return i.reply({ content: '⛔ خاص بمولاي ارثر والملكة إيدا فقط!', flags: EPH });
+                if (!topHere(i, ctx)) return i.reply({ content: access.denyTextOwner(i.guild, ctx.CONFIG), flags: EPH });
                 const role = i.options.getRole('الرتبة'), price = i.options.getInteger('السعر');
                 const items = shopFor(g);
                 items.push({ roleId: role.id, price });
@@ -197,7 +202,7 @@ async function handle(i, ctx) {
                 return i.reply(`✅ ضفت **${role.name}** للمتجر بسعر ${price} ${COIN}`);
             }
             case 'متجر_حذف': {
-                if (!owner(ctx.getTier(i.user.id, i.member))) return i.reply({ content: '⛔ خاص بمولاي ارثر والملكة إيدا فقط!', flags: EPH });
+                if (!topHere(i, ctx)) return i.reply({ content: access.denyTextOwner(i.guild, ctx.CONFIG), flags: EPH });
                 const idx = i.options.getInteger('رقم') - 1;
                 const items = shopFor(g);
                 if (!items[idx]) return i.reply({ content: '⚠️ ما فيه عنصر بهذا الرقم.', flags: EPH });

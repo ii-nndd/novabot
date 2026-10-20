@@ -17,6 +17,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags, PermissionFlagsBits, AuditLogEvent, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
 const art = require('./art');
+const access = require('./access');
 
 const EPH = MessageFlags.Ephemeral;
 const P = PermissionFlagsBits;
@@ -182,9 +183,10 @@ function immune(guild, uid, member) {
     if (uid === guild.client.user.id) return true;          // البوت نفسه (كل إجراءاتنا من هنا)
     if (uid === guild.ownerId) return true;                 // صاحب السيرفر
     if (!cfg.protectOwners) {
-        if (uid === CONFIG.ARTHUR_ID || uid === CONFIG.SPECIAL_USER_ID) return true;
+        // 🌐 سيرفرنا: ارثر/إيدا/الرتبة الملكية · أي سيرفر ثاني: صاحب السيرفر + اللي أعطاه صلاحية الدخول
         const m = member || guild.members.cache.get(uid);
-        if (m && CONFIG.ROYAL_ROLE_ID && m.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) return true;
+        if (m && access.isRoyal(guild, m, CONFIG)) return true;
+        if (!m && access.isSuper(uid, CONFIG)) return true;
     }
     if (cfg.whitelist.users.includes(uid)) return true;
     if (cfg.whitelist.bots.includes(uid)) return true;
@@ -246,15 +248,17 @@ async function notify(guild, { title, lines, culprit, culpritName, avatarURL, st
                 .setDescription(lines.join('\n').slice(0, 400));
             payload = { embeds: [e], files: [new AttachmentBuilder(png, { name: 'alert.png' })] };
             // المنشنات (للملكي) تنرسل نصاً عشان التنبيه يوصل بأسرع وقت
-            const ping = [CONFIG.ARTHUR_ID, CONFIG.SPECIAL_USER_ID].filter(Boolean).map(id => `<@${id}>`).join(' ');
+            const pingIds = access.royalIds(guild, CONFIG);
+            const ping = pingIds.map(id => `<@${id}>`).join(' ');
             payload.content = `${ping} 🚨 ${title}`.slice(0, 1800);
-            payload.allowedMentions = { users: [CONFIG.ARTHUR_ID, CONFIG.SPECIAL_USER_ID].filter(Boolean) };
+            payload.allowedMentions = { users: pingIds };
         }
     }
     if (!payload.embeds) {
+        const pingIds = access.royalIds(guild, CONFIG);
         payload = {
-            content: ([`<@${CONFIG.ARTHUR_ID}>`, `**🛡️ درع نوفا — ${title}**`, ...lines].join('\n')).slice(0, 1900),
-            allowedMentions: { users: [CONFIG.ARTHUR_ID].filter(Boolean) }
+            content: ([pingIds.map(id => `<@${id}>`).join(' '), `**🛡️ درع نوفا — ${title}**`, ...lines].join('\n')).slice(0, 1900),
+            allowedMentions: { users: pingIds }
         };
         const why = art.available() ? 'فشل رسم الصورة (رجّعنا نص)' : 'محرك الصور مو متاح (نص فقط)';
         rep.art = false; rep.artNote = why;
@@ -268,12 +272,11 @@ async function notify(guild, { title, lines, culprit, culpritName, avatarURL, st
         } catch (err) { rep.channel = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالروم', err); }
     } else rep.channel = '⚠️ ما اخترت روم تنبيهات (خانة فاضية)';
     if (cfg.alertDM) {
-        // ديسكورد يرفض الخاص لو البوت ما يشارك الحساب أي سيرفر → نرسل لكل ملكي «موجود فعلاً بالسيرفر»
-        const targets = [
-            ['ارثر', CONFIG.ARTHUR_ID],
-            ['إيدا', CONFIG.SPECIAL_USER_ID],
-            ['صاحب السيرفر', guild.ownerId]
-        ].concat((cfg.alertUsers || []).map(id => ['إضافي', id]))
+        // ديسكورد يرفض الخاص لو البوت ما يشارك الحساب أي سيرفر → نرسل لكل مسؤول «موجود فعلاً بالسيرفر»
+        const nameOf = (id) => id === CONFIG.ARTHUR_ID ? 'ارثر' : id === CONFIG.SPECIAL_USER_ID ? 'إيدا'
+            : id === guild.ownerId ? 'صاحب السيرفر' : 'مسؤول';
+        const targets = access.royalIds(guild, CONFIG).map(id => [nameOf(id), id])
+            .concat((cfg.alertUsers || []).map(id => ['إضافي', id]))
             .filter(t => t[1]).filter((t, i, a) => a.findIndex(x => x[1] === t[1]) === i);
         const out = [];
         for (const [label, id] of targets) {
@@ -524,7 +527,7 @@ async function threat(guild, { type, uid, detail, count, hard, revert }) {
     // نسجل بالسجل العام للوحة (صفحة السجل)
     try {
         const g = store.read('log.json', []);
-        g.unshift({ msg: `🛡️ درع نوفا: ${reasonOf(type, detail)} — ${name} — ${action}`, by: 'درع نوفا', at: Date.now() });
+        g.unshift({ msg: `🛡️ درع نوفا: ${reasonOf(type, detail)} — ${name} — ${action}`, by: 'درع نوفا', at: Date.now(), gid: guild.id });
         store.write('log.json', g.slice(0, 300));
     } catch {}
     return action;
@@ -891,15 +894,12 @@ function init(client, CONFIG_) {
         }
     }, 'فلترة الرسائل'));
 
-    // لقطة أولى + تحديث دوري (نقطة رجوع لصلاحيات الرتب والرومات)
+    // لقطة أولى + تحديث دوري (نقطة رجوع لصلاحيات الرتب والرومات) — لكل السيرفرات
     client.on('clientReady', safe(async () => {
-        const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
-        if (!guild) return;
-        snapshot(guild);
+        for (const g of client.guilds.cache.values()) snapshot(g);
     }, 'اللقطة'));
     setInterval(() => {
-        const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
-        if (guild && guild.available) snapshot(guild);
+        for (const g of client.guilds.cache.values()) if (g.available) snapshot(g);
     }, 10 * 60_000).unref?.();
 
     console.log('🛡️ درع نوفا شغال (حماية النك والاختراق)');
@@ -955,7 +955,7 @@ async function handle(i, ctx) {
     if (i.commandName !== 'حماية') return false;
     const tier = ctx.getTier(i.user.id, i.member);
     if (!['arthur', 'ida', 'royal'].includes(tier)) {
-        await i.reply({ content: '⛔ هذا الأمر لأهل الرتبة الملكية فقط 🛡️', flags: EPH });
+        await i.reply({ content: access.denyTextRanks(i.guild, CONFIG), flags: EPH });
         return true;
     }
     const op = i.options.getString('عملية');
@@ -986,7 +986,7 @@ async function handle(i, ctx) {
                 { name: 'العقوبة', value: cfg.mode === 'ban' ? 'حظر فوري' : cfg.mode === 'kick' ? 'طرد فوري' : 'سحب كل الرتب', inline: true },
                 { name: 'القفل', value: locked ? '🔒 السيرفر مقفول' : '🔓 مفتوح', inline: true },
                 { name: 'حدود التخريب', value: `حذف رومات ${cfg.limits.channelDelete} · حذف رتب ${cfg.limits.roleDelete} · حظر ${cfg.limits.ban} — خلال ${cfg.windowSec} ثانية`, inline: false },
-                { name: 'محميين', value: `ارثر وإيدا والرتبة الملكية${cfg.whitelist.users.length ? ' + ' + cfg.whitelist.users.length + ' مستثنى' : ''}`, inline: false },
+                { name: 'محميين', value: `${access.isNova(guild.id, CONFIG) ? 'ارثر وإيدا والرتبة الملكية' : 'صاحب السيرفر والمسؤولين'}${cfg.whitelist.users.length ? ' + ' + cfg.whitelist.users.length + ' مستثنى' : ''}`, inline: false },
                 { name: 'حوادث مسجّلة', value: String(incidents(guild.id, 200).length), inline: true }
             );
         return i.reply({ embeds: [e] });

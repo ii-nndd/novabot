@@ -21,6 +21,7 @@ const {
 } = require('discord.js');
 const store = require('./store');
 const art = require('./art');
+const access = require('./access');
 const points = require('./points');
 const cards = require('./cards');
 const economy = require('./economy');
@@ -275,19 +276,17 @@ async function send(guild, gid, { resend = false } = {}) {
     return { ok: true, messageId: msg.id, channelId: ch.id, channelName: ch.name, edited: false };
 }
 
-// عند كل إقلاع: نتأكد الرسالة موجودة ومحدّثة (ولو انحذفت نرسلها من جديد)
+// عند كل إقلاع: نتأكد الرسالة موجودة ومحدّثة (ولو انحذفت نرسلها من جديد) — لكل سيرفر مفعّل فيه
 async function ensure(client, CONFIG) {
-    const gid = CONFIG && CONFIG.GUILD_ID;
-    if (!gid) return;
-    const cfg = get(gid);
-    if (!cfg.enabled || !cfg.channelId) return;
-    try {
-        const g = client.guilds.cache.get(gid);
-        if (!g) return;
-        await send(g, gid, { resend: false });
-        console.log('🎛️ لوحة التحكم: محدّثة بالروم المحدد');
-    } catch (e) {
-        console.error('❌ لوحة التحكم (ensure):', e.message);
+    for (const g of client.guilds.cache.values()) {
+        const cfg = get(g.id);
+        if (!cfg.enabled || !cfg.channelId) continue;
+        try {
+            await send(g, g.id, { resend: false });
+            console.log(`🎛️ لوحة التحكم: محدّثة بسيرفر ${g.name}`);
+        } catch (e) {
+            console.error('❌ لوحة التحكم (ensure):', e.message);
+        }
     }
 }
 
@@ -429,13 +428,13 @@ async function handleModal(i, ctx) {
         const ch = await channelOf(i.guild, cfg.contactId);
         let sent = false;
         if (ch) {
-            const ping = ctx.CONFIG && ctx.CONFIG.ARTHUR_ID;
+            const ping = [...access.royalIds(i.guild, ctx.CONFIG)][0];
             await ch.send({ content: ping ? `<@${ping}>` : '', embeds: [e], allowedMentions: { users: ping ? [ping] : [] } })
                 .then(() => { sent = true; }).catch(() => {});
         }
         if (!sent) {
-            // ما فيه روم تواصل → نجرب خاص الملكيين (اللي موجودين بالسيرفر)
-            const ids = [...new Set([ctx.CONFIG.ARTHUR_ID, ctx.CONFIG.SPECIAL_USER_ID, i.guild.ownerId].filter(Boolean))];
+            // ما فيه روم تواصل → نجرب خاص المسؤولين (اللي موجودين بالسيرفر)
+            const ids = access.royalIds(i.guild, ctx.CONFIG);
             for (const id of ids) {
                 const u = await i.client.users.fetch(id).catch(() => null);
                 if (u) await u.send({ embeds: [e] }).then(() => { sent = true; }).catch(() => {});
@@ -454,7 +453,7 @@ async function handleModal(i, ctx) {
 // ===== أمر السلاش /لوحة_تحكم (إرسال أو تحديث اللوحة) =====
 const commands = [
     new SlashCommandBuilder().setName('لوحة_تحكم')
-        .setDescription('إرسال أو تحديث لوحة التحكم بهذا الروم (ارثر وإيدا والرتبة الملكية فقط)')
+        .setDescription('إرسال أو تحديث لوحة التحكم بهذا الروم (للإدارة فقط)')
         .addBooleanOption(o => o.setName('جديدة').setDescription('إرسال رسالة جديدة بدل تعديل الحالية'))
         .setDMPermission(false)
 ].map(c => c.toJSON());
@@ -463,7 +462,7 @@ async function handle(i, ctx) {
     if (!i.isChatInputCommand() || i.commandName !== 'لوحة_تحكم') return false;
     const tier = ctx.getTier(i.user.id, i.member);
     if (tier !== 'arthur' && tier !== 'ida' && tier !== 'royal') {
-        await replyEph(i, '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا والرتبة الملكية.');
+        await replyEph(i, access.denyTextRoyal(i.guild, ctx.CONFIG));
         return true;
     }
     try {
