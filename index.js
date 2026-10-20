@@ -56,6 +56,25 @@ const CONFIG = {
     DISRESPECT_ROLE_ID: '1559161253249949776'
 };
 
+// 💘 أزواج «الحب» الثابتة — نسبتها ما تنزل ولا تتغير أبداً مهما صار.
+// الصيغة: { a: 'آيدي الأول', b: 'آيدي الثاني', pct: النسبة } — وتشتغل بالاتجاهين.
+const LOVE_FIXED = [
+    { a: '848996426918002731', b: '1550879705115398156', pct: 100 },  // ارثر ❤️ نبض
+    { a: '848996426918002731', b: '1542941271205875812', pct: 100 }   // ارثر ❤️ إيدا
+];
+
+// نسبة الحب: لو الزوجين بالقائمة الثابتة نرجّع نسبتهم المحفوظة، وإلا الحساب القديم
+function lovePercent(x, y) {
+    const p = [String(x), String(y)];
+    const hit = LOVE_FIXED.find(o => (o.a === p[0] && o.b === p[1]) || (o.a === p[1] && o.b === p[0]));
+    if (hit) return { percent: hit.pct, fixed: true };
+    try {
+        return { percent: Number((BigInt(p[0]) + BigInt(p[1])) % 101n), fixed: false };
+    } catch {
+        return { percent: 50, fixed: false };
+    }
+}
+
 // 🔒 نسجّل الإعدادات بنظام الصلاحية/القفل (access) — عشان أي ملف يقدر يسأل «هذا السيرفر مفعّل؟»
 access.boot(CONFIG);
 
@@ -529,8 +548,11 @@ client.on('interactionCreate', async (interaction) => {
             case 'حب': {
                 const a = interaction.options.getUser('الاول');
                 const b = interaction.options.getUser('الثاني') ?? interaction.user;
-                const percent = Number((BigInt(a.id) + BigInt(b.id)) % 101n);
-                return say(`💘 نسبة التوافق بين ${a} و ${b}: **${percent}%**`);
+                const r = lovePercent(a.id, b.id);
+                return say(
+                    `💘 نسبة التوافق بين ${a} و ${b}: **${r.percent}%**`
+                    + (r.fixed ? '\n💞 نسبة ثابتة للأبد — ما تنزل ولا تنقص أبداً.' : '')
+                );
             }
 
             case 'كرة':
