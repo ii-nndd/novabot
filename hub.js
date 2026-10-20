@@ -28,6 +28,29 @@ const economy = require('./economy');
 const giveaway = require('./giveaway');
 const colors = require('./colors');
 const tickets = require('./tickets');
+const fs = require('fs');
+const path = require('path');
+
+// 🖼️ بانر مخصص لسيرفرنا فقط: حُط صورة باسم nova-panel.png بجانب هذا الملف
+//     → تُستخدم هي بدل الرسم تلقائياً (لرسالة لوحة التحكم + معاينة الداشبورد).
+//     باقي السيرفرات تكمل على البانر المرسوم (art.panelCard).
+const CUSTOM_BANNER = 'nova-panel.png';
+let bannerCache = { mtime: -1, size: -1, buf: null };
+
+function customBanner(guild) {
+    try {
+        if (!guild || !access.isNova(guild.id)) return null;
+        const p = path.join(__dirname, CUSTOM_BANNER);
+        const st = fs.statSync(p);
+        if (bannerCache.buf && bannerCache.mtime === st.mtimeMs && bannerCache.size === st.size) return bannerCache.buf;
+        const buf = fs.readFileSync(p);
+        if (!buf || buf.length < 200) return null;
+        bannerCache = { mtime: st.mtimeMs, size: st.size, buf };
+        return buf;
+    } catch {
+        return null;
+    }
+}
 
 const EPH = MessageFlags.Ephemeral;
 const FILE = 'hub.cfg.json';
@@ -202,8 +225,10 @@ function drawBanner(guild, cfg) {
     return p.catch(() => null);
 }
 
-// يرجّع البانر PNG (للمعاينة بالداشبورد) — أو null لو الرسم مو متاح
+// يرجّع البانر PNG (للمعاينة بالداشبورد وللرسالة) — أو null لو الرسم مو متاح
 async function renderImage(guild) {
+    const own = customBanner(guild);          // صورتنا المخصصة (سيرفرنا فقط)
+    if (own) return own;
     const cfg = get(guild ? guild.id : '');
     return drawBanner(guild, cfg);
 }
@@ -217,9 +242,9 @@ async function payload(guild, cfg, gid) {
     e.setFooter({ text: 'سيرفر نوفا · اضغط على الخيار اللي تبية 👇' });
     const out = { embeds: [e], components: [] };
 
-    // البانر المصمم — لو فشل أو تأخّر أو الرسم مو متاح نكمل بدونه
-    if (cfg.image && art.available()) {
-        const png = await drawBanner(guild, cfg);
+    // البانر (صورتنا المخصصة لسيرفرنا، أو المرسوم) — لو فشل أو تأخّر نكمل بدونه
+    if (cfg.image) {
+        const png = await renderImage(guild);
         if (png) {
             e.setImage('attachment://hub.png');
             out.files = [new AttachmentBuilder(png, { name: 'hub.png' })];
