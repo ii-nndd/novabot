@@ -49,7 +49,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-20.1';
+const BUILD = '2026-10-20.2';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -304,9 +304,9 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','nova'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','nova'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
-// هل يظهر هالبند بهذا السيرفر؟ (حالة البوت والردود = لسيرفرنا فقط · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
-function navOk(n,d){var k=n[3];if(!k)return true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','super'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+// هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
+function navOk(n,d){var k=n[3];if(!k)return true;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -1227,7 +1227,7 @@ if(!d.guild||!(d.guilds||[]).length){r.appendChild(guildPicker(d));return}
 var logo=el('div',{class:'logo'});logo.innerHTML=NOVA_MARK_SVG+'<span>'+d.guild.name.slice(0,22)+'</span>';
 var sb=el('div',{class:'sb'},[logo].concat(NAV.filter(function(n){return navOk(n,d)}).map(function(n){
   if(n.length===1)return el('div',{class:'navlab',text:n[0].slice(1)});
-  var b=el('button',{class:'nav','data-p':n[0]},[el('span',{class:'ic',text:n[1]}),el('span',{text:n[2]})]);
+  var b=el('button',{class:'nav','data-p':n[0]},[el('span',{class:'ic',text:n[1]}),el('span',{text:n[2]})].concat(n[3]==='super'?[el('span',{style:'margin-inline-start:auto;font-size:11px;opacity:.85',text:'👑'})]:[]));
   b.addEventListener('click',function(){show(n[0])});return b})).concat([
   el('a',{class:'nav',href:'/auth/logout'},[el('span',{class:'ic',text:'🚪'}),el('span',{text:'خروج ('+d.user.name+')'})])
 ]));
@@ -1463,7 +1463,14 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         res.status(400).json({ error: 'هذي الصفحة خاصة بسيرفر نوفا فقط' });
         return false;
     };
-    const hn = (fn) => (req, res) => { if (!novaOnly(req, res)) return; return h(fn)(req, res); };
+    // 👑 ولازم يكون ارثر أو إيدا نفسه (ما تنفتح لأي أحد بالقائمة — حتى لو كان بسيرفرنا)
+    const superOnly = (req, res) => {
+        const s = session(req);
+        if (s && access.isSuper(s.id, CONFIG)) return true;
+        res.status(403).json({ error: 'هذي الصفحة خاصة بصاحب البوت فقط 👑' });
+        return false;
+    };
+    const hn = (fn) => (req, res) => { if (!novaOnly(req, res)) return; if (!superOnly(req, res)) return; return h(fn)(req, res); };
     const role = (g, id) => { const r = g.roles.cache.get(String(id)); if (!r || r.id === g.id) throw new Error('الرتبة مو موجودة'); return r; };
     const isCat = (c) => c.type === ChannelType.GuildCategory;
 
