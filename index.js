@@ -27,6 +27,7 @@ const presence = require('./presence');
 const hub = require('./hub');
 const colors = require('./colors');
 const reactions = require('./reactions');
+const replies2 = require('./replies2');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
 const tsfunnel = require('./tsfunnel');
@@ -653,6 +654,31 @@ async function handleChannelToggle(message) {
     return true;
 }
 
+// 💬 ردود الخاص (المحرر الجديد): أقسام سيرفر نوفا اللي مفعّل عليها «تشغل بالخاص».
+//    الخاص ما له سيرفر، فالمصدر هو إعدادات سيرفرنا — وكل قسم لازم يفعّل خيار الخاص بنفسه.
+client.on('messageCreate', async (message) => {
+    try {
+        if (message.author.bot || message.guild) return;
+        const content = (message.content || '').trim();
+        if (!content) return;
+        // بوابة القفل: الخاص يُحسب على سيرفر نوفا (وهو مفعّل دائماً) — و`replies2.match` نفسه يرفض أي سيرفر مقفول
+        if (!access.canRun(CONFIG.GUILD_ID, message.author.id, CONFIG)) return;
+        if (onCooldown(message.author.id, 5)) return;
+        const hit = replies2.match({
+            gid: CONFIG.GUILD_ID,
+            member: null,
+            userId: message.author.id,
+            content,
+            called: true,
+            isDM: true,
+            guildName: 'الخاص',
+            displayName: message.author.username
+        });
+        if (!hit) return;
+        await message.reply(hit.text).catch(() => {});
+    } catch { }
+});
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
@@ -682,7 +708,26 @@ client.on('messageCreate', async (message) => {
     }
 
     const tokens = tokenize(content);
-    if (!(await isCalled(message, tokens, content))) return;   // بدون نداء: ما يرد أبداً
+    const called = await isCalled(message, tokens, content);
+
+    // 💬 الردود المخصصة (محرر الردود الجديد): تُفحص **قبل** أي نظام قديم.
+    //    لو ما طابقت شي، يكمل الوضع القديم حرفياً زي ما هو (نوفا ما يتغيّر).
+    const hit = replies2.match({
+        gid: message.guild.id,
+        member: message.member,
+        userId: message.author.id,
+        content,
+        called,
+        isDM: false,
+        guildName: message.guild.name,
+        displayName: (message.member && message.member.displayName) || message.author.username
+    });
+    if (hit) {
+        if (onCooldown(message.author.id, 4)) return;
+        return void message.reply(access.clean(hit.text, message.guild, CONFIG)).catch(() => {});
+    }
+
+    if (!called) return;   // بدون نداء: ما يرد أبداً
     if (onCooldown(message.author.id)) return;
 
     const tier = getTier(message.author.id, message.member);

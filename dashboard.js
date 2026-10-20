@@ -23,6 +23,7 @@ const giveaway = require('./giveaway');
 const admin = require('./admin');
 const access = require('./access');
 const reactions = require('./reactions');
+const replies2 = require('./replies2');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -50,7 +51,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-20.4';
+const BUILD = '2026-10-20.5';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -243,6 +244,15 @@ a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:
 .logo,.navlab{display:none}.nav{white-space:nowrap;padding:9px 11px;font-size:13.5px;width:auto;gap:7px}.nav.on:before{display:none}
 .topbar{padding:11px 14px}.page{padding:16px 14px calc(96px + env(safe-area-inset-bottom))}
 .hero{padding:16px;gap:11px}.hero h1{font-size:20px}.uchip .unm{display:none}}
+/* 💬 محرر الردود: فقاعات محادثة */
+.chat{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.msg{display:flex;gap:8px;align-items:flex-start}
+.msg.me{flex-direction:row-reverse}
+.aven{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#20202a;border:1px solid #33333f;flex:0 0 auto;font-size:14px}
+.bub{max-width:80%;padding:8px 12px;border-radius:14px;background:#191922;border:1px solid #2a2a35;line-height:1.9}
+.msg.me .bub{background:linear-gradient(135deg,#3a1622,#25101a);border-color:#5a2233}
+.bub .who{font-size:11px;opacity:.6;margin-bottom:2px}
+.btext{white-space:pre-wrap;word-break:break-word;font-size:14px}
 </style></head><body><canvas id="bg"></canvas><div id="root"></div><div id="toast"></div>
 <script>
 var $=function(i){return document.getElementById(i)};
@@ -305,9 +315,9 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','super'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
-function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
+function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -379,69 +389,195 @@ var sec=Number(p.uptime)||0,ut=$('upt');
 PAGE_T=setInterval(function(){if(!ut)return;sec++;var mm=Math.floor(sec/60),hh=Math.floor(mm/60),dd=Math.floor(hh/24),s='';if(dd)s+=dd+' يوم ';if(hh%24)s+=hh%24+' ساعة ';if(mm%60)s+=mm%60+' دقيقة ';s+=sec%60+' ثانية';ut.textContent='مدة التشغيل '+s},1000);
 return Promise.resolve()})};
 // ===== الردود: نفس لوحة /panel لكن داخل الداشبورد (بدون كلمة مرور) =====
-pages.replies=function(m){return api('replies').then(function(first){var D={all:first.all||{},custom:first.custom||{}},curKey=null;
+pages.replies=function(m){return api('rep2').then(function(d){
+var isNova=!!(d&&d.isNova),secs=(d&&d.sections)||[],roles=(d&&d.roles)||[],lg=(d&&d.legacy)||null;
+var lim=(d&&d.limits)||{sections:30,entries:80,min:3};
+var tab='mine',cur=secs.length?secs[0].id:null,lkey=null,LA=null;
+m.appendChild(el('h1',{text:'الردود 💬'}));
+m.appendChild(el('div',{class:'mut',style:'line-height:1.9',text:'تبني هنا ردود البوت بنفسك: تكتب «كلام العضو» + «رد البوت» ويظهر على شكل محادثة. لكل قسم تحدد مين يشتغل له (شخص · رتبة · الكل)، وتقدر تضيف أكثر من رد لنفس الكلمة — والبوت يختار عشوائي.'}));
+var bar=el('div',{class:'row',style:'gap:8px;flex-wrap:wrap;margin:14px 0'}),body=el('div');
+m.appendChild(bar);m.appendChild(body);
+
+// ===== فقاعات المحادثة (المعاينة) =====
+function bubble(who,icon,text,cls){return el('div',{class:'msg '+cls},[el('div',{class:'aven',text:icon}),el('div',{class:'bub'},[el('div',{class:'who',text:who}),el('div',{class:'btext',text:text})])])}
+
+// ===== الشريط العلوي =====
+function drawTabs(){bar.innerHTML='';
+ var a=el('button',{class:tab==='mine'?'btn':'b2',text:'🧩 أقسامي ('+secs.length+')'});a.addEventListener('click',function(){tab='mine';draw()});bar.appendChild(a);
+ if(isNova){var b=el('button',{class:tab==='legacy'?'btn':'b2',text:'📦 الأقسام الأصلية'});b.addEventListener('click',function(){tab='legacy';draw()});bar.appendChild(b)}
+ if(tab==='mine'&&secs.length<lim.sections){var nb=el('button',{class:'b2',text:'➕ قسم جديد'});
+  nb.addEventListener('click',function(){nb.disabled=true;api('rep2/section',{act:'add',name:'قسم جديد',emoji:'💬'}).then(function(r){secs=r.sections;cur=r.id;draw();toast('انضاف قسم جديد ✅')}).catch(function(e){nb.disabled=false;toast(e.message,1)})});
+  bar.appendChild(nb)}
+}
+
+// ===== كرت إعدادات القسم =====
+function sectionCard(s){
+ var nm=el('input',{value:s.name,style:'flex:1;min-width:150px'});
+ var em=el('input',{value:s.emoji,style:'width:62px;text-align:center;font-size:20px'});
+ var tt=el('select',{},[opt('all','🌐 الكل'),opt('role','🎭 رتبة'),opt('user','👤 شخص')]);tt.value=s.target&&s.target.type?s.target.type:'all';
+ var rs=el('select',{},[opt('','— اختر رتبة —')].concat(roles.map(function(r){return opt(r.id,r.name)})));rs.value=(s.target&&s.target.type==='role')?s.target.id:'';
+ var us=el('input',{placeholder:'آيدي الشخص',style:'flex:1;min-width:150px',value:(s.target&&s.target.type==='user')?s.target.id:''});
+ var st={enabled:s.enabled,anywhere:s.anywhere,dm:s.dm};
+ var swEn=sw(s.enabled,function(v){st.enabled=v}),swAn=sw(s.anywhere,function(v){st.anywhere=v}),swDm=sw(s.dm,function(v){st.dm=v});
+ function syncT(){rs.style.display=tt.value==='role'?'':'none';us.style.display=tt.value==='user'?'':'none'}
+ tt.addEventListener('change',syncT);syncT();
+ var save=el('button',{class:'btn',text:'💾 حفظ القسم'});
+ save.addEventListener('click',function(){save.disabled=true;
+  api('rep2/section',{act:'edit',id:s.id,patch:{name:nm.value,emoji:em.value,enabled:st.enabled,anywhere:st.anywhere,dm:st.dm,target:{type:tt.value,id:tt.value==='role'?rs.value:(tt.value==='user'?us.value:'')}}}).then(function(r){secs=r.sections;toast('انحفظ ✅');draw()}).catch(function(e){save.disabled=false;toast(e.message,1)})});
+ var mv1=el('button',{class:'b2',text:'▲ فوق'}),mv2=el('button',{class:'b2',text:'▼ تحت'}),dl=el('button',{class:'dn',text:'🗑️ حذف القسم'});
+ mv1.addEventListener('click',function(){api('rep2/section',{act:'move',id:s.id,dir:'up'}).then(function(r){secs=r.sections;draw()}).catch(function(e){toast(e.message,1)})});
+ mv2.addEventListener('click',function(){api('rep2/section',{act:'move',id:s.id,dir:'down'}).then(function(r){secs=r.sections;draw()}).catch(function(e){toast(e.message,1)})});
+ dl.addEventListener('click',function(){if(!confirm('حذف القسم «'+s.name+'» وكل ردوده؟'))return;
+  api('rep2/section',{act:'del',id:s.id}).then(function(r){secs=r.sections;cur=secs.length?secs[0].id:null;draw();toast('انحذف')}).catch(function(e){toast(e.message,1)})});
+ return card('⚙️ إعدادات القسم',el('div',{},[
+   el('div',{class:'row',style:'gap:8px;flex-wrap:wrap'},[em,nm]),
+   el('div',{class:'row',style:'gap:8px;flex-wrap:wrap;margin-top:10px'},[el('span',{class:'mut',text:'يشتغل لـ:'}),tt,rs,us]),
+   el('div',{class:'row',style:'gap:16px;flex-wrap:wrap;margin-top:12px'},[
+     el('div',{class:'row'},[swEn,el('span',{text:'القسم مفعّل'})]),
+     el('div',{class:'row'},[swAn,el('span',{text:'بدون مناداة'})]),
+     el('div',{class:'row'},[swDm,el('span',{text:'يشتغل بالخاص 📩'})])
+   ]),
+   el('div',{class:'mut',style:'margin-top:8px;font-size:12px',text:'«بدون مناداة» مطفّي = يرد بس لما أحد ينادي البوت (يا عبد …). لو شغّلته يرد على الكلمة بأي رسالة — استخدمه بحكمة عشان ما يزعج.'}),
+   el('div',{class:'row',style:'gap:8px;flex-wrap:wrap;margin-top:12px'},[save,mv1,mv2,dl])
+ ]));
+}
+
+// ===== كرت إضافة رد (المربعين) =====
+function addCard(s){
+ var t=el('input',{placeholder:'كلام العضو — مثال: صباح الخير',style:'width:100%'});
+ var r=el('textarea',{placeholder:'رد البوت — يقبل أكثر من سطر',style:'width:100%;min-height:90px;margin-top:6px'});
+ var md=el('select',{style:'margin-top:8px'},[opt('contains','🔍 داخل الكلام — أي رسالة فيها الكلمة'),opt('exact','🎯 مطابقة تامة — الرسالة كلها نفس الكلمة')]);
+ var add=el('button',{class:'btn',text:'➕ إضافة الرد'});
+ add.addEventListener('click',function(){
+  if(!String(t.value||'').trim())return toast('اكتب «كلام العضو»',1);
+  if(!String(r.value||'').trim())return toast('اكتب «رد البوت»',1);
+  add.disabled=true;
+  api('rep2/entry',{act:'add',sid:s.id,t:t.value,mode:md.value,r:[r.value]}).then(function(x){secs=x.sections;toast('انضاف ✅');draw()}).catch(function(e){add.disabled=false;toast(e.message,1)})});
+ return card('✍️ أضف رد جديد',el('div',{},[
+   el('div',{class:'mut',text:'كلام العضو (الكلمة اللي تنتظرها)'}),t,
+   el('div',{class:'mut',style:'margin-top:10px',text:'رد البوت'}),r,
+   md,
+   el('div',{class:'row',style:'gap:8px;margin-top:10px'},[add]),
+   el('div',{class:'mut',style:'margin-top:8px;font-size:12px',text:'متغيرات: {user} = منشن العضو · {name} = اسمه · {server} = اسم السيرفر. وللرد العشوائي: أضف نفس الكلمة مرتين، أو اكتب أكثر من سطر بمربع «رد البوت».'})
+ ]));
+}
+
+// ===== محرر رد واحد (يظهر فوق الكرت نفسه) =====
+function entryEditor(s,e){
+ var box=el('div');
+ var t=el('input',{value:e.t,style:'width:100%'});
+ var r=el('textarea',{style:'width:100%;min-height:90px;margin-top:6px'});
+ r.value=(e.r||[]).join('\n');
+ var md=el('select',{style:'margin-top:8px'},[opt('contains','🔍 داخل الكلام'),opt('exact','🎯 مطابقة تامة')]);md.value=e.mode;
+ var sv=el('button',{class:'btn',text:'💾 حفظ الرد'}),cx=el('button',{class:'b2',text:'✖ إلغاء'});
+ cx.addEventListener('click',function(){draw()});
+ sv.addEventListener('click',function(){
+  sv.disabled=true;
+  api('rep2/entry',{act:'edit',sid:s.id,eid:e.id,patch:{t:t.value,mode:md.value,r:String(r.value||'').split('\n').map(function(x){return x.trim()}).filter(Boolean)}})
+   .then(function(x){secs=x.sections;toast('انحفظ ✅');draw()}).catch(function(z){sv.disabled=false;toast(z.message,1)})});
+ box.appendChild(el('div',{class:'mut',text:'كلام العضو'}));box.appendChild(t);
+ box.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'رد البوت — كل سطر = رد (يختار عشوائي)'}));box.appendChild(r);
+ box.appendChild(md);
+ box.appendChild(el('div',{class:'row',style:'gap:8px;margin-top:8px'},[sv,cx]));
+ return box;
+}
+
+// ===== كرت رد واحد =====
+function entryCard(s,e){
+ var wrap=el('div',{class:'ecard',style:'border:1px solid #2a2a35;border-radius:14px;padding:10px;margin-bottom:10px'});
+ var dup=s.entries.filter(function(x){return x.id!==e.id&&String(x.t||'').trim()===String(e.t||'').trim()}).length;
+ wrap.appendChild(el('div',{class:'row',style:'gap:6px;flex-wrap:wrap;margin-bottom:8px'},[
+   el('span',{class:'tag',text:e.mode==='exact'?'🎯 مطابقة تامة':'🔍 داخل الكلام'}),
+   el('span',{class:'tag '+(e.on?'on':'off'),text:e.on?'مفعّل':'موقوف'}),
+   dup?el('span',{class:'tag',text:'🔀 '+((e.r||[]).length+dup)+' ردود عشوائية'}):null
+ ]));
+ wrap.appendChild(bubble('العضو','👤',e.t,'me'));
+ (e.r||[]).forEach(function(t){wrap.appendChild(bubble('البوت','🤖',t,'bot'))});
+ var ed=el('button',{class:'b2',text:'✏️ تعديل'}),vo=el('button',{class:'b2',text:e.on?'⏸️ إيقاف':'▶️ تشغيل'}),de=el('button',{class:'dn',text:'🗑️ حذف'});
+ ed.addEventListener('click',function(){wrap.innerHTML='';wrap.appendChild(entryEditor(s,e))});
+ vo.addEventListener('click',function(){api('rep2/entry',{act:'edit',sid:s.id,eid:e.id,patch:{on:!e.on}}).then(function(x){secs=x.sections;draw()}).catch(function(z){toast(z.message,1)})});
+ de.addEventListener('click',function(){if(!confirm('حذف هذا الرد؟'))return;
+  api('rep2/entry',{act:'del',sid:s.id,eid:e.id}).then(function(x){secs=x.sections;draw();toast('انحذف')}).catch(function(z){toast(z.message,1)})});
+ wrap.appendChild(el('div',{class:'row',style:'gap:8px;flex-wrap:wrap;margin-top:10px'},[ed,vo,de]));
+ return wrap;
+}
+
+// ===== تبويب «أقسامي» =====
+function drawMine(){
+ if(!secs.length){body.appendChild(card('',el('div',{class:'mut',style:'line-height:2',text:'ما عندك أقسام بعد. اضغط «➕ قسم جديد» فوق، وبعدها اكتب أول رد.'})));return}
+ var side=el('div',{class:'card'},[el('div',{class:'cat',text:'الأقسام 📂'})]);
+ var list=el('div');
+ secs.forEach(function(s){
+  var b=el('button',{class:'ritem'+(s.id===cur?' on':''),style:'width:100%;text-align:right'},[el('span',{class:'rn',text:(s.emoji||'💬')+' '+s.name}),el('span',{class:'rc',text:String(s.entries.length)})]);
+  b.addEventListener('click',function(){cur=s.id;draw()});list.appendChild(b)});
+ side.appendChild(list);
+ var s=null;secs.forEach(function(x){if(x.id===cur)s=x});if(!s){s=secs[0];cur=s.id}
+ var pane=el('div');
+ pane.appendChild(sectionCard(s));
+ pane.appendChild(addCard(s));
+ var ec=el('div');
+ if(!s.entries.length)ec.appendChild(el('div',{class:'mut',style:'padding:8px',text:'ما فيه ردود بعد — أضف أول رد من الكرت فوق.'}));
+ s.entries.forEach(function(e){ec.appendChild(entryCard(s,e))});
+ pane.appendChild(card('💬 الردود ('+s.entries.length+')',ec));
+ body.appendChild(el('div',{class:'rgrid'},[side,pane]));
+}
+
+// ===== تبويب «الأقسام الأصلية» (نوفا فقط — نفس المحرر القديم) =====
 var L={greet:'ترحيب',food:'أكل',hit:'ضرب',rude:'إهانة',thanks:'شكر',where:'وينك',move:'قوم/تحرك',status:'الحالة',help:'مساعدة',poems:'شعر',jokes:'نكت',alerts:'تنبيهات',welcome:'ترحيب الفويس',custom:'كلمات خاصة',games:'الألعاب'};
 var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'بدون رتبة (الكل)',disrespect:'رتبة بدون احترام',all:'الكل',sentences:'جمل سرعة الكتابة',words:'كلمات المبعثرة',flags:'الأعلام',rawan:'روان',nabd:'نبض ارثر'};
 function rlab(k){var p=k.split('.');return (L[p[0]]||p[0])+(p[1]?' ← '+(T[p[1]]||p[1]):'')}
 function rhint(k){return k.indexOf('custom.')===0?'الصيغة: الكلمة => الرد   (مثال: صباح الخير => صباح النور)':k==='games.flags'?'الصيغة: العلم => اسم الدولة | اسم ثاني   (مثال: 🇸🇦 => السعودية)':k.indexOf('games.')===0?'كل سطر = عنصر واحد، بدون تشكيل':''}
-m.appendChild(el('h1',{text:'الردود 💬'}));
-m.appendChild(el('div',{class:'mut',text:'هنا تعدّل كل كلمات البوت: كل سطر = رد، والبوت يختار واحد عشوائي. الحفظ ينفّذ فوراً — ما يحتاج لوحة ثانية ولا كلمة مرور.'}));
-var kw=el('input',{placeholder:'🔍 ابحث عن تصنيف…',style:'flex:1;min-width:150px'});
-var list=el('div',{class:'rlist'});
-var pane=el('div',{class:'card red'},[el('div',{class:'mut',text:'اختر تصنيف من القائمة وعدّل ردوده.'})]);
-var side=el('div',{class:'card rside'});
-side.appendChild(el('div',{class:'cat',text:'التصنيفات 📂'}));
-side.appendChild(row([kw]));
-side.appendChild(list);
-m.appendChild(el('div',{class:'rgrid'},[side,pane]));
-function apply(r){if(r&&r.all){D.all=r.all;D.custom=r.custom||{}}drawList(kw.value.trim().toLowerCase())}
-function drawList(f){list.innerHTML='';var n=0;
-  Object.keys(D.all).sort().forEach(function(k){
-    if(f&&k.toLowerCase().indexOf(f)<0&&rlab(k).indexOf(f)<0)return;n++;
-    var b=el('button',{class:'ritem'+(k===curKey?' on':'')},[el('span',{class:'rn',text:rlab(k)}),D.custom[k]?el('span',{class:'rc',style:'color:#84e8ab',text:'معدّل'}):null,el('span',{class:'rc',text:'('+((D.all[k]||[]).length)+')'})]);
-    b.addEventListener('click',function(){openKey(k)});list.appendChild(b)});
-  if(!n)list.appendChild(el('div',{class:'mut',text:'ما لقيت تصنيف بهذا الاسم'}))}
-function save(k,txt){return api('replies/save',{key:k,lines:String(txt).split('\\n')}).then(function(r){apply(r);toast('انحفظ ✅');openKey(k)}).catch(function(e){toast(e.message,1)})}
-function openKey(k){curKey=k;drawList(kw.value.trim().toLowerCase());pane.innerHTML='';
-  pane.appendChild(el('div',{class:'cat',text:'✏️ '+rlab(k)}));
-  pane.appendChild(el('div',{class:'kv'},[el('span',{class:'tag mono',text:k}),D.custom[k]?el('span',{class:'tag on',text:'معدّل يدوياً'}):el('span',{class:'tag',text:'افتراضي'}),k.indexOf('custom.')===0?el('span',{class:'tag',text:'تصنيف خاص'}):null]));
-  var h=rhint(k);if(h)pane.appendChild(el('div',{class:'mut',style:'margin:4px 0 8px',text:h}));
-  var ta=el('textarea',{spellcheck:'false',style:'min-height:320px'});
-  ta.value=(D.all[k]||[]).join('\\n');pane.appendChild(ta);
+function drawLegacy(){
+ var D={all:(lg&&lg.all)||{},custom:(lg&&lg.custom)||{}};
+ var keys=Object.keys(D.all).sort();
+ if(!lkey||!D.all[lkey])lkey=keys[0]||null;
+ var kw=el('input',{placeholder:'🔍 ابحث عن تصنيف…',style:'width:100%'});
+ var list=el('div');
+ function drawList(f){list.innerHTML='';var n=0;
+  keys.forEach(function(k){
+   if(f&&k.toLowerCase().indexOf(f)<0&&rlab(k).indexOf(f)<0)return;n++;
+   var b=el('button',{class:'ritem'+(k===lkey?' on':''),style:'width:100%;text-align:right'},[el('span',{class:'rn',text:rlab(k)}),D.custom[k]?el('span',{class:'rc',style:'color:#84e8ab',text:'معدّل'}):null,el('span',{class:'rc',text:'('+((D.all[k]||[]).length)+')'})]);
+   b.addEventListener('click',function(){lkey=k;draw()});list.appendChild(b)});
+  if(!n)list.appendChild(el('div',{class:'mut',style:'padding:8px',text:'ما فيه نتائج'}))}
+ kw.addEventListener('input',function(){drawList(kw.value.trim().toLowerCase())});
+ drawList('');
+ var side=el('div',{class:'card'},[el('div',{class:'cat',text:'التصنيفات 📂'}),kw,list]);
+ var pane=el('div',{class:'card'});
+ if(!lkey){pane.appendChild(el('div',{class:'mut',text:'اختر تصنيف من القائمة.'}))}
+ else{
+  pane.appendChild(el('div',{class:'cat',text:'✏️ '+rlab(lkey)}));
+  pane.appendChild(el('div',{class:'kv'},[el('span',{class:'tag mono',text:lkey}),D.custom[lkey]?el('span',{class:'tag on',text:'معدّل يدوياً'}):el('span',{class:'tag',text:'افتراضي'})]));
+  var h=rhint(lkey);if(h)pane.appendChild(el('div',{class:'mut',style:'margin:4px 0 8px',text:h}));
+  var ta=el('textarea',{spellcheck:'false',style:'min-height:320px;width:100%'});
+  ta.value=(D.all[lkey]||[]).join('\n');pane.appendChild(ta);
   var cnt=el('div',{class:'mut',style:'margin-top:6px'});
-  function up(){cnt.textContent='عدد الردود: '+ta.value.split('\\n').filter(function(s){return s.trim()}).length}
+  function up(){cnt.textContent='عدد الردود: '+ta.value.split('\n').filter(function(x){return x.trim()}).length}
   up();ta.addEventListener('input',up);pane.appendChild(cnt);
-  pane.appendChild(el('div',{class:'row',style:'margin-top:10px'},[
-    el('button',{class:'btn',text:'💾 حفظ',on:{click:function(){save(k,ta.value)}}}),
-    el('button',{class:'b2',text:'↩️ الافتراضي / حذف',on:{click:function(){if(!confirm('رجوع للردود الافتراضية؟ (لو تصنيف أنشأته إنت، بينحذف كامل)'))return;api('replies/reset',{key:k}).then(function(r){apply(r);toast('تم ✅');openKey(k)}).catch(function(e){toast(e.message,1)})}}})
-  ]))}
-kw.addEventListener('input',function(){drawList(kw.value.trim().toLowerCase())});
-var nk=el('input',{placeholder:'فئة.اسم — مثال: custom.سارة',style:'flex:1;min-width:180px'});
-var fi=el('input',{type:'file',accept:'.json',style:'display:none'});
-fi.addEventListener('change',function(e){var f=e.target.files&&e.target.files[0];if(!f)return;var rd=new FileReader();
-  rd.onload=function(){try{var mp=JSON.parse(rd.result);api('replies/import',{map:mp}).then(function(x){apply(x);toast('تم الاستيراد: '+x.imported+' تصنيف ✅')}).catch(function(z){toast(z.message,1)})}catch(z){toast('ملف غير صالح',1)}};rd.readAsText(f)});
-var cc=el('div',{class:'card'});
-cc.appendChild(el('div',{class:'cat',text:'➕ تصنيف جديد ونسخة احتياطية'}));
-cc.appendChild(el('div',{class:'mut',text:'التصنيف الجديد يكون بصيغة فئة.اسم (الفئة بحروف إنجليزية): مثال custom.سارة أو greet.سالم.'}));
-cc.appendChild(row([nk,el('button',{class:'btn',text:'➕ إنشاء',on:{click:function(){var k=(nk.value||'').trim();if(!k)return toast('اكتب اسم التصنيف',1);save(k,'اكتب ردك هنا')}}})]));
-cc.appendChild(el('div',{class:'row',style:'margin-top:12px'},[
-  el('button',{class:'b2',text:'⬇️ نسخة احتياطية',on:{click:function(){var a=el('a',{href:URL.createObjectURL(new Blob([JSON.stringify(D.custom,null,2)],{type:'application/json'})),download:'replies-backup.json'});document.body.appendChild(a);a.click();a.remove();toast('انزلت النسخة ✅')}}}),
-  el('button',{class:'b2',text:'⬆️ استيراد نسخة',on:{click:function(){fi.click()}}})
-]));
-cc.appendChild(fi);
-var gcard=el('div',{class:'card'});
-gcard.appendChild(el('div',{class:'cat',text:'🎮 قوائم الألعاب'}));
-gcard.appendChild(el('div',{class:'mut',text:'هذي القوائم اللي ياخذ منها البوت أسئلة الألعاب — كل سطر = عنصر واحد. اضغط أي وحدة تفتح لك تعديلها فوراً باليسار.'}));
-gcard.appendChild(el('div',{class:'row',style:'margin-top:10px'},[
-  el('button',{class:'b2',text:'⌨️ جمل سرعة الكتابة',on:{click:function(){openKey('games.sentences')}}}),
-  el('button',{class:'b2',text:'🔤 كلمات المبعثرة',on:{click:function(){openKey('games.words')}}}),
-  el('button',{class:'b2',text:'🏳️ الأعلام',on:{click:function(){openKey('games.flags')}}})
-]));
-gcard.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'لعبة الرياضيات ما لها قائمة (البوت يولّد الأرقام عشوائي). صيغة الأعلام: العلم => اسم الدولة | اسم ثاني'}));
-m.appendChild(gcard);
-m.appendChild(cc);
-drawList('');
-return Promise.resolve()})};
+  var sv=el('button',{class:'btn',text:'💾 حفظ'}),rs=el('button',{class:'b2',text:'↩️ الافتراضي / حذف'});
+  sv.addEventListener('click',function(){sv.disabled=true;
+   api('replies/save',{key:lkey,lines:ta.value.split('\n')}).then(function(r){lg={all:r.all,custom:r.custom};toast('انحفظ ✅');draw()}).catch(function(e){sv.disabled=false;toast(e.message,1)})});
+  rs.addEventListener('click',function(){if(!confirm('رجوع للردود الافتراضية؟ (لو تصنيف أنشأته إنت، بينحذف كامل)'))return;
+   api('replies/reset',{key:lkey}).then(function(r){lg={all:r.all,custom:r.custom};toast('رجع للافتراضي');draw()}).catch(function(e){toast(e.message,1)})});
+  pane.appendChild(el('div',{class:'row',style:'gap:8px;margin-top:10px'},[sv,rs]));
+ }
+ var bk=el('button',{class:'b2',text:'⬇️ نسخة احتياطية'}),im=el('button',{class:'b2',text:'⬆️ استيراد'}),fi=el('input',{type:'file',accept:'.json',style:'display:none'});
+ bk.addEventListener('click',function(){var a=el('a',{href:URL.createObjectURL(new Blob([JSON.stringify(D.custom,null,2)],{type:'application/json'}))});a.download='replies-backup.json';a.click()});
+ im.addEventListener('click',function(){fi.click()});
+ fi.addEventListener('change',function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var rd=new FileReader();
+  rd.onload=function(){try{var mp=JSON.parse(rd.result);api('replies/import',{map:mp}).then(function(x){lg={all:x.all,custom:x.custom};toast('تم استيراد '+x.imported+' تصنيف ✅');draw()}).catch(function(z){toast(z.message,1)})}catch(z){toast('ملف غير صالح',1)}};rd.readAsText(f)});
+ var cc=card('📦 نسخة احتياطية',el('div',{},[
+  el('div',{class:'mut',style:'line-height:1.9',text:'هذي الأقسام الأصلية للبوت (ترحيب · أكل · ضرب · شكر · الحالة …) — سلوكها ما تغيّر. كل سطر = رد، والبوت يختار واحد عشوائي.'}),
+  el('div',{class:'row',style:'gap:8px;margin-top:10px'},[bk,im,fi])
+ ]));
+ body.appendChild(el('div',{class:'rgrid'},[side,pane]));
+ body.appendChild(cc);
+}
+
+// ===== رسم =====
+function draw(){drawTabs();body.innerHTML='';if(tab==='legacy')drawLegacy();else drawMine()}
+draw();
+return;
+})};
 pages.bot=function(m){return api('bot').then(function(d){var c=d.config;
 m.appendChild(el('h1',{text:'التحكم بالبوت'}));
 m.appendChild(el('div',{class:'mut',text:'حدّد الرومات المسموح للبوت يتفاعل فيها، وفعّل/عطّل البوت في أي روم بنقرة وحدة. في وضع "الرومات المحددة فقط" البوت يتجاهل أي رسالة أو أمر خارج الرومات المفعّلة تماماً. تنبيه: الحظر التلقائي في روم الفخ نظام مستقل وما يتأثر بهذي الإعدادات أبداً.'}));
@@ -1567,6 +1703,15 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         return false;
     };
     const hn = (fn) => (req, res) => { if (!novaOnly(req, res)) return; if (!superOnly(req, res)) return; return h(fn)(req, res); };
+    // 💬 الردود: لكل سيرفر لوحته — لكن **أقسام سيرفر نوفا** تبقى 👑 لارثر/إيدا فقط (خصوصية)
+    const repOnly = (req, res) => {
+        if (String(guildId(req)) !== String(CONFIG.GUILD_ID)) return true;
+        const s = session(req);
+        if (s && access.isSuper(s.id, CONFIG)) return true;
+        res.status(403).json({ error: 'هذي الصفحة خاصة بصاحب البوت فقط 👑' });
+        return false;
+    };
+    const hr = (fn) => (req, res) => { if (!repOnly(req, res)) return; return h(fn)(req, res); };
     const role = (g, id) => { const r = g.roles.cache.get(String(id)); if (!r || r.id === g.id) throw new Error('الرتبة مو موجودة'); return r; };
     const isCat = (c) => c.type === ChannelType.GuildCategory;
 
@@ -1614,25 +1759,72 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         return { ok: true, cfg: reactions.get(g.id) };
     }));
 
-    api.get('/replies', hn(async () => ({ all: replies.all(), custom: replies.overrides() })));
-    api.post('/replies/save', hn(async (g, b, req) => {
+    api.get('/replies', hr(async () => ({ all: replies.all(), custom: replies.overrides() })));
+    api.post('/replies/save', hr(async (g, b, req) => {
         const key = String((b && b.key) || '').trim();
         if (!key || !Array.isArray(b.lines) || !replies.set(key, b.lines))
             throw new Error('طلب غير صالح — تأكد أن اسم التصنيف بصيغة فئة.اسم');
         note(req, 'تعديل الردود: ' + key);
         return { all: replies.all(), custom: replies.overrides() };
     }));
-    api.post('/replies/reset', hn(async (g, b, req) => {
+    api.post('/replies/reset', hr(async (g, b, req) => {
         const key = String((b && b.key) || '').trim();
         if (!key) throw new Error('طلب غير صالح');
         replies.reset(key);
         note(req, 'إرجاع الردود للافتراضي: ' + key);
         return { all: replies.all(), custom: replies.overrides() };
     }));
-    api.post('/replies/import', hn(async (g, b, req) => {
+    api.post('/replies/import', hr(async (g, b, req) => {
         const n = replies.importAll((b && b.map) || {});
         note(req, `استيراد نسخة ردود (${n} تصنيف)`);
         return { imported: n, all: replies.all(), custom: replies.overrides() };
+    }));
+
+    // ===== 💬 محرر الردود الجديد (أقسام لكل سيرفر) =====
+    api.get('/rep2', hr(async (g) => {
+        const isNova = String(g.id) === String(CONFIG.GUILD_ID);
+        const roles = [...g.roles.cache.values()]
+            .filter(r => r && r.id !== g.id && !r.managed)
+            .sort((a, b) => (b.position || 0) - (a.position || 0))
+            .slice(0, 200)
+            .map(r => ({ id: r.id, name: r.name }));
+        return {
+            isNova,
+            sections: replies2.get(g.id),
+            legacy: isNova ? { all: replies.all(), custom: replies.overrides() } : null,
+            roles,
+            limits: { sections: replies2.MAX_SECTIONS, entries: replies2.MAX_ENTRIES, min: replies2.MIN_CONTAINS }
+        };
+    }));
+    api.post('/rep2/section', hr(async (g, b, req) => {
+        const act = String((b && b.act) || '');
+        let extra = {};
+        if (act === 'add') extra = { id: replies2.addSection(g.id, b) };
+        else if (act === 'edit') extra = { section: replies2.editSection(g.id, String(b.id || ''), b.patch || b) };
+        else if (act === 'del') extra = {};
+        else if (act === 'move') extra = {};
+        else throw new Error('طلب غير صالح');
+        if (act === 'del') replies2.delSection(g.id, String(b.id || ''));
+        if (act === 'move') replies2.moveSection(g.id, String(b.id || ''), b.dir === 'up' ? 'up' : 'down');
+        const label = { add: 'قسم جديد', edit: 'تعديل قسم', del: 'حذف قسم', move: 'ترتيب الأقسام' }[act] || act;
+        note(req, 'الردود: ' + label + ' — ' + g.name);
+        return Object.assign({ ok: true, sections: replies2.get(g.id) }, extra);
+    }));
+    api.post('/rep2/entry', hr(async (g, b, req) => {
+        const act = String((b && b.act) || '');
+        const sid = String((b && b.sid) || '');
+        if (act === 'add') replies2.addEntry(g.id, sid, b);
+        else if (act === 'edit') replies2.editEntry(g.id, sid, String(b.eid || ''), b.patch || b);
+        else if (act === 'del') replies2.delEntry(g.id, sid, String(b.eid || ''));
+        else throw new Error('طلب غير صالح');
+        const label = { add: 'إضافة رد', edit: 'تعديل رد', del: 'حذف رد' }[act] || act;
+        note(req, 'الردود: ' + label + ' — ' + g.name);
+        return { ok: true, sections: replies2.get(g.id) };
+    }));
+    api.post('/rep2/reset', hr(async (g, b, req) => {
+        replies2.reset(g.id);
+        note(req, 'الردود: تصفير كل أقسام ' + g.name);
+        return { ok: true, sections: [] };
     }));
 
     api.get('/channels', h(async (g) => {
