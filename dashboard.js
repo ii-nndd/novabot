@@ -4,7 +4,7 @@
 // المتغيرات المطلوبة: DISCORD_CLIENT_ID و DISCORD_CLIENT_SECRET و SESSION_SECRET
 const crypto = require('crypto');
 const path = require('path');
-const { ChannelType, EmbedBuilder } = require('discord.js');
+const { ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const store = require('./store');
 const welcome = require('./welcome');
 const tickets = require('./tickets');
@@ -22,6 +22,7 @@ const economy = require('./economy');
 const giveaway = require('./giveaway');
 const admin = require('./admin');
 const access = require('./access');
+const reactions = require('./reactions');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -49,7 +50,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-20.3';
+const BUILD = '2026-10-20.4';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -304,7 +305,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','super'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','super'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
 function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
@@ -623,6 +624,67 @@ var ch=el('select',{},d.channels.filter(function(c){return c.type==='text'}).map
 var img=sw(true,function(){});
 m.appendChild(card('🖼️ شكل الإعلان',el('div',{class:'row'},[img,el('span',{class:'mut',text:'إرسال الإعلان كصورة مصممة (بطاقة نوفا)'})])));
 m.appendChild(card('',el('div',{},[ch,t,x,el('div',{style:'margin-top:10px'},[el('button',{class:'btn',text:'إرسال الإعلان',on:{click:function(){go(api('announce',{channelId:ch.value,title:t.value,text:x.value,image:img.querySelector('input').checked}),'انرسل ✅')}}})])])))})};
+// ===== 😍 الرياكشن: تفاعل تلقائي مع الصور برومات محددة =====
+pages.react=function(m){return api('react').then(function(d){
+ m.appendChild(el('h1',{text:'الرياكشن 😍'}));
+ m.appendChild(el('div',{class:'mut',style:'line-height:1.9',text:'البوت يحط إيموجي على أي صورة تنزل بالرومات اللي تختارها — حتى ٣ إيموجيات. الرسائل النصية ما يلمسها، ويحترم حدود ديسكورد عشان ما ياخذ حظر.'}));
+ var c=(d&&d.cfg)||{enabled:false,channels:[],emojis:['😍']};
+ var chans=(d&&d.channels)||[];
+ var can=(d&&d.can)||{view:true,react:true,history:true};
+ var stat=(d&&d.stat)||{n:0,last:0};
+ var st={enabled:!!c.enabled};
+ var miss=[];if(!can.react)miss.push('إضافة تفاعلات');if(!can.view)miss.push('عرض الرومات');if(!can.history)miss.push('قراءة سجل الرسائل');
+ m.appendChild(card('الحالة',el('div',{},[
+  el('div',{class:'row'},[
+   el('span',{class:'tag '+(c.enabled?'on':'off'),text:c.enabled?'✅ شغال':'⛔ مطفّي'}),
+   el('span',{class:'tag',text:'📷 '+((c.channels||[]).length)+' روم'}),
+   el('span',{class:'tag',text:'😍 '+((c.emojis||[]).join(' '))}),
+   el('span',{class:'tag',text:'تفاعل مع '+((stat&&stat.n)||0)+' إيموجي'})
+  ]),
+  el('div',{class:'mut',style:'margin-top:8px',text:miss.length?('⚠️ البوت ناقصه صلاحيات: '+miss.join('، ')+' — لازم تعطيه إياها من صلاحيات رتبته.'):'✅ البوت عنده كل الصلاحيات المطلوبة.'})
+ ])));
+ m.appendChild(card('التشغيل',el('div',{class:'row'},[sw(st.enabled,function(v){st.enabled=v}),el('span',{text:'تشغيل الرياكشن التلقائي'})])));
+ var sel=el('select',{multiple:'multiple',size:'10',style:'width:100%'},chans.map(function(x){return opt(x.id,'# '+x.name)}));
+ [].forEach.call(sel.options,function(o){if((c.channels||[]).indexOf(o.value)>=0)o.selected=true});
+ function pickCh(){var a=[];[].forEach.call(sel.options,function(o){if(o.selected)a.push(o.value)});return a}
+ m.appendChild(card('📷 الرومات ('+chans.length+' روم متاح)',el('div',{},[
+  el('div',{class:'mut',style:'margin-bottom:6px',text:'اختر روم واحد أو أكثر (Ctrl أو Shift للاختيار المتعدد).'}),
+  sel,
+  el('div',{class:'mut',style:'margin-top:6px;font-size:12px',text:'المختار حالياً: '+pickCh().length+' روم'})
+ ])));
+ var list=c.emojis||['😍'];
+ var inputs=[0,1,2].map(function(i){
+  return el('input',{value:list[i]||'',placeholder:i===0?'😍':'اختياري',style:'width:74px;text-align:center;font-size:22px;padding:6px'});
+ });
+ var quick=['😍','🔥','❤️','👏','😂','💯','😮','🥰'];
+ var qrow=el('div',{class:'row',style:'gap:6px;flex-wrap:wrap;margin-top:8px'});
+ quick.forEach(function(e){
+  var b=el('button',{class:'b2',text:e,style:'font-size:18px;padding:4px 10px'});
+  b.addEventListener('click',function(){
+   var empty=null;for(var i=0;i<inputs.length;i++){if(!String(inputs[i].value||'').trim()){empty=inputs[i];break}}
+   (empty||inputs[inputs.length-1]).value=e;
+  });
+  qrow.appendChild(b);
+ });
+ m.appendChild(card('😍 الإيموجيات (حتى ٣)',el('div',{},[
+  el('div',{class:'row',style:'gap:8px'},inputs),
+  qrow,
+  el('div',{class:'mut',style:'margin-top:8px;font-size:12px',text:'تحط إيموجي عادي، أو إيموجي من رومات السيرفر بصيغة <:اسم:الآيدي>، أو آيدي إيموجي.'})
+ ])));
+ var saveBtn=el('button',{class:'btn',text:'💾 حفظ'});
+ saveBtn.addEventListener('click',function(){
+  var em=[];inputs.forEach(function(x){var v=String(x.value||'').trim();if(v&&em.indexOf(v)<0)em.push(v)});
+  if(!em.length)return toast('حط إيموجي وحد على الأقل',1);
+  saveBtn.disabled=true;
+  api('react/save',{enabled:st.enabled,channels:pickCh(),emojis:em}).then(function(){
+   toast('انحفظ ✅');show('react');
+  }).catch(function(e){saveBtn.disabled=false;toast(e.message,1)});
+ });
+ var resetBtn=el('button',{class:'b2',text:'🔄 رجوع الافتراضي'});
+ resetBtn.addEventListener('click',function(){resetBtn.disabled=true;api('react/reset',{}).then(function(){toast('رجع للافتراضي');show('react')}).catch(function(e){resetBtn.disabled=false;toast(e.message,1)})});
+ m.appendChild(el('div',{class:'row',style:'margin-top:14px;gap:8px;flex-wrap:wrap'},[saveBtn,resetBtn]));
+ return;
+})}
 pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
 var q=el('input',{placeholder:'ابحث بالاسم',style:'flex:1;min-width:160px'}),box=el('div',{class:'card'});
 function act(path,body,msg){go(api(path,body),msg,null);setTimeout(load,900)}
@@ -1519,6 +1581,39 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     }));
 
     // ===== الردود: نفس وظيفة لوحة /panel لكن داخل الداشبورد (بدون كلمة مرور) — لسيرفرنا فقط =====
+    // ===== 😍 الرياكشن: البوت يحط إيموجي (حتى ٣) على أي صورة تنزل برومات محددة =====
+    api.get('/react', h(async (g) => {
+        await g.channels.fetch().catch(() => {});
+        const me = g.members.me || (typeof g.members.fetchMe === 'function' ? await g.members.fetchMe().catch(() => null) : null);
+        const can = (p) => !!(me && me.permissions.has(p));
+        const channels = [...g.channels.cache.values()]
+            .filter(c => !c.isThread() && c.isTextBased && c.isTextBased())
+            .sort((a, b) => (a.rawPosition || 0) - (b.rawPosition || 0))
+            .map(c => ({ id: c.id, name: c.name, parentId: c.parentId || '' }));
+        return {
+            cfg: reactions.get(g.id),
+            channels,
+            stat: reactions.stat(g.id),
+            maxEmoji: reactions.MAX_EMOJI,
+            maxChannels: reactions.MAX_CHANNELS,
+            can: {
+                view: can(PermissionFlagsBits.ViewChannel),
+                react: can(PermissionFlagsBits.AddReactions),
+                history: can(PermissionFlagsBits.ReadMessageHistory)
+            }
+        };
+    }));
+    api.post('/react/save', h(async (g, b, req) => {
+        const cfg = reactions.set(g.id, b);
+        note(req, `حفظ إعدادات الرياكشن (${cfg.channels.length} روم · ${cfg.emojis.join(' ')})`);
+        return { ok: true, cfg };
+    }));
+    api.post('/react/reset', h(async (g, b, req) => {
+        reactions.reset(g.id);
+        note(req, 'رجوع إعدادات الرياكشن للافتراضي');
+        return { ok: true, cfg: reactions.get(g.id) };
+    }));
+
     api.get('/replies', hn(async () => ({ all: replies.all(), custom: replies.overrides() })));
     api.post('/replies/save', hn(async (g, b, req) => {
         const key = String((b && b.key) || '').trim();

@@ -26,6 +26,7 @@ const guard = require('./guard');
 const presence = require('./presence');
 const hub = require('./hub');
 const colors = require('./colors');
+const reactions = require('./reactions');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
 const tsfunnel = require('./tsfunnel');
@@ -328,6 +329,7 @@ async function onClientReady() {
         giveaway.reschedule(client);
         jail.init(client);
         trap.init(client, CONFIG);
+        reactions.init(client);          // 😍 تفاعل تلقائي مع الصور (بدون صلاحيات إضافية)
         guard.init(client, CONFIG);
         presence.init(client, CONFIG);
         colors.init(client, CONFIG);
