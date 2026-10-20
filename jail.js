@@ -3,6 +3,7 @@
 // لرؤية روم معين (Allow overwrite)، ديسكورد يرجّح السماح على المنع بين الرتب المختلفة بغض النظر عن ترتيبها.
 // عشان كذا وقت السجن نسحب كل رتب العضو الثانية مؤقتاً (ونحفظها) ونخليه بس برتبة السجن، وقت الإفراج نرجعها له.
 const store = require('./store');
+const access = require('./access');
 
 const DEF = { enabled: false, roleId: '', textChannelId: '', voiceChannelId: '' };
 
@@ -45,6 +46,7 @@ function init(client) {
     client.on('channelCreate', async (channel) => {
         try {
             if (!channel.guild) return;
+            if (!access.isApproved(channel.guild.id)) return;   // 🔒 سيرفر مقفول
             const cfg = get(channel.guild.id);
             if (!cfg.enabled || !cfg.roleId) return;
             await syncChannel(channel, cfg);

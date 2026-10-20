@@ -21,6 +21,7 @@ function init(client, CONFIG) {
     client.on('messageCreate', async (message) => {
         try {
             if (!message.guild || message.author.id === client.user.id) return;
+            if (!access.isApproved(message.guild.id)) return;   // 🔒 سيرفر مقفول
             const cfg = get(message.guild.id);
             if (!cfg.enabled || !cfg.channelId || message.channel.id !== cfg.channelId) return;
 

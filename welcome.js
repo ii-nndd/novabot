@@ -4,6 +4,7 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
 const art = require('./art');
+const access = require('./access');
 
 const IMG = 'nova-welcome.png', IMG_LEAVE = 'nova-leave.png';
 
@@ -81,6 +82,7 @@ async function leaveImage(v) {
 function init(client) {
     client.on('guildMemberAdd', async (m) => {
         try {
+            if (!access.isApproved(m.guild.id)) return;   // 🔒 سيرفر مقفول
             const cfg = get(m.guild.id);
             if (cfg.autoRoleId) await m.roles.add(cfg.autoRoleId, 'رتبة تلقائية').catch(() => {});
             if (!cfg.enabled || !cfg.channelId) return;
@@ -96,6 +98,7 @@ function init(client) {
 
     client.on('guildMemberRemove', async (m) => {
         try {
+            if (!access.isApproved(m.guild.id)) return;   // 🔒 سيرفر مقفول
             const cfg = get(m.guild.id);
             if (!cfg.leaveEnabled || !cfg.channelId) return;
             const ch = await m.guild.channels.fetch(cfg.channelId).catch(() => null);

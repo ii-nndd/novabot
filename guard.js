@@ -574,7 +574,16 @@ function reset(gid) {
 // ===== المراقبة =====
 function init(client, CONFIG_) {
     CONFIG = CONFIG_ || {};
-    const safe = (fn, what) => (...args) => { try { return Promise.resolve(fn(...args)).catch(e => logErr(what, e)); } catch (e) { logErr(what, e); } };
+    const safe = (fn, what) => (...args) => {
+        try {
+            // 🔒 سيرفر مقفول (ما فعّلناه من اللوحة) = درع نوفا ما يشتغل فيه أبداً
+            const gid = args.map(a => (a && a.guild && a.guild.id)
+                || (a && a.guildId)
+                || (a && a.id && a.members && a.roles ? a.id : '')).find(Boolean) || '';
+            if (gid && !access.isApproved(gid, CONFIG)) return;
+            return Promise.resolve(fn(...args)).catch(e => logErr(what, e));
+        } catch (e) { logErr(what, e); }
+    };
 
     // ١) حذف روم → نعرف منو حذفه ونرجّعه ونعاقبه
     client.on('channelDelete', safe(async (ch) => {
@@ -896,10 +905,10 @@ function init(client, CONFIG_) {
 
     // لقطة أولى + تحديث دوري (نقطة رجوع لصلاحيات الرتب والرومات) — لكل السيرفرات
     client.on('clientReady', safe(async () => {
-        for (const g of client.guilds.cache.values()) snapshot(g);
+        for (const g of client.guilds.cache.values()) if (access.isApproved(g.id, CONFIG)) snapshot(g);
     }, 'اللقطة'));
     setInterval(() => {
-        for (const g of client.guilds.cache.values()) if (g.available) snapshot(g);
+        for (const g of client.guilds.cache.values()) if (g.available && access.isApproved(g.id, CONFIG)) snapshot(g);
     }, 10 * 60_000).unref?.();
 
     console.log('🛡️ درع نوفا شغال (حماية النك والاختراق)');

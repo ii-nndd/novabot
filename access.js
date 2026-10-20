@@ -1,39 +1,88 @@
 // ============================================================================
-//  access.js — 🔑 صلاحية الدخول للوحة + «الملكي» لكل سيرفر
+//  access.js — 🔑 صلاحية الدخول · 🔒 قفل البوت · 👑 «الملكي» لكل سيرفر
 // ----------------------------------------------------------------------------
-//  الفكرة: البوت صار يشتغل على كل السيرفرات، والداشبورد لكل سيرفر لحاله:
-//    ١) ما يدخل اللوحة إلا **اللي أعطيه صلاحية** (قائمة مسموحين لكل سيرفر)
-//       → مو أي واحد معه الرابط يقدر يدخل، ولا يقدر يسوي أي شي.
-//    ٢) صاحب سيرفرنا (ارثر/إيدا/الرتبة الملكية) مثل ما هو بالضبط — ما تغير شي.
-//    ٣) بأي سيرفر ثاني: «الملكي» = **صاحب السيرفر** + اللي أنا عطيتهم صلاحية الدخول.
+//  الفكرة (٢٠ أكتوبر ٢٠٢٦):
+//    ١) 🔒 **البوت مقفول افتراضياً**: أي سيرفر يضيف البوت يظل **مقفول** — ما يرد على
+//       أي رسالة، ولا تنزل عنده أوامر سلاش، ولا يشتغل عنده أي نظام (ترحيب/مستويات/
+//       حماية/قرعات…) — إلا إذا **ارثر أو إيدا فعّلوا السيرفر** من اللوحة.
+//    ٢) 🔑 **اللوحة مقفولة**: ما يدخلها إلا اللي عنده صلاحية بقائمة سيرفره.
+//       وصاحب السيرفر ما يدخل إلا بعد ما يتفعّل سيرفره (وبعدها هو يضيف مسؤولينه).
+//    ٣) 👑 سيرفرنا (نوفا): ارثر/إيدا/الرتبة الملكية — نفس السلوك القديم بالضبط.
 //
 //  التخزين: access.json
-//    { "guilds": { "<gid>": [ { id, name, at, by } ] } }
+//    {
+//      "approved": { "<gid>": { at, by, name } },              ← السيرفرات المفعّلة
+//      "guilds":   { "<gid>": [ { id, name, at, by } ] }       ← المسموح لهم باللوحة
+//    }
 //
-//  يعرض: list · add · remove · clear · has · isSuper · superIds · superSet ·
-//        isRoyal · royalIds · canEnter · guildsOf · canManage · label · denyText
+//  يعرض:
+//    boot · isApproved · approve · approvedList · canRun          (القفل)
+//    list · add · remove · clear · has · canUse · canManage       (الصلاحية)
+//    isSuper · superIds · superSet · isNova · isRoyal · royalIds  (الرتب)
+//    guildsOf · label · royalWord · clean · isTop · denyText*
 // ============================================================================
 const store = require('./store');
 
 const FILE = 'access.json';
 const MAX_PER_GUILD = 200;   // حد منطقي عشان ما يكبر الملف
 
-const isId = (v) => (/^\d{5,25}$/.test(String(v || '')) ? String(v) : '');
+const asId = (v) => String(v == null ? '' : v).trim();
+const isId = (v) => (/^\d{5,25}$/.test(asId(v)) ? asId(v) : '');
 const clip = (s, n) => (String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n));
+
+// إعدادات البوت (نسجّلها مرة وحدة عند الإقلاع عشان أي ملف يقدر يسأل بدون تمرير CONFIG)
+let CFG = {};
+function boot(CONFIG) { if (CONFIG && CONFIG.GUILD_ID != null) CFG = CONFIG; return CFG; }
+const cfg = (CONFIG) => (CONFIG && CONFIG.GUILD_ID != null ? CONFIG : CFG);
 
 // القراءة الآمنة (لو الملف خرب أو قديم)
 function all() {
-    const a = store.read(FILE, { guilds: {} });
-    if (!a || typeof a !== 'object' || Array.isArray(a)) return { guilds: {} };
-    if (!a.guilds || typeof a.guilds !== 'object') a.guilds = {};
+    const a = store.read(FILE, {});
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return { approved: {}, guilds: {} };
+    if (!a.guilds || typeof a.guilds !== 'object' || Array.isArray(a.guilds)) a.guilds = {};
+    if (!a.approved || typeof a.approved !== 'object' || Array.isArray(a.approved)) a.approved = {};
     return a;
 }
 function save(a) { store.write(FILE, a); return a; }
 
-// قائمة المسموحين لسيرفر
+// ===== 🔒 تفعيل/قفل السيرفرات =====
+
+// هل السيرفر مفعّل؟ (سيرفرنا مفعّل دايماً)
+function isApproved(gid, CONFIG) {
+    const c = cfg(CONFIG);
+    const g = asId(gid);
+    if (!g) return false;
+    if (isNova(g, c)) return true;
+    return !!all().approved[g];
+}
+
+// تفعيل (on=true) أو قفل (on=false) سيرفر
+function approve(gid, on, by, name) {
+    const g = isId(gid);
+    if (!g) throw new Error('آيدي السيرفر غير صالح');
+    const a = all();
+    if (on) a.approved[g] = { at: Date.now(), by: isId(by) || '', name: clip(name, 80) || g };
+    else delete a.approved[g];
+    save(a);
+    return !!on;
+}
+
+// قائمة السيرفرات المفعّلة (للعرض بالسجل)
+function approvedList() {
+    const a = all();
+    return Object.keys(a.approved).map(id => ({ id, ...a.approved[id] }));
+}
+
+// 🔒 هل نشتغل بهذا السيرفر؟ (مفعّل · أو اللي يكتب ارثر/إيدا = يقدرون يجرّبون بأي مكان)
+function canRun(gid, uid, CONFIG) {
+    const c = cfg(CONFIG);
+    if (isApproved(gid, c)) return true;
+    return !!uid && isSuper(uid, c);
+}
+
+// ===== قائمة المسموحين باللوحة (لكل سيرفر) =====
 const list = (gid) => (all().guilds[isId(gid)] || []).slice();
 
-// إضافة (أو تحديث) عضو مسموح
 function add(gid, id, name, by) {
     const g = isId(gid), uid = isId(id);
     if (!g) throw new Error('آيدي السيرفر غير صالح');
@@ -49,7 +98,6 @@ function add(gid, id, name, by) {
     return a.guilds[g];
 }
 
-// إزالة عضو
 function remove(gid, id) {
     const g = isId(gid), uid = isId(id);
     const a = all();
@@ -59,7 +107,6 @@ function remove(gid, id) {
     return arr;
 }
 
-// تصفير قائمة سيرفر
 function clear(gid) {
     const a = all();
     delete a.guilds[isId(gid)];
@@ -67,46 +114,46 @@ function clear(gid) {
     return [];
 }
 
-// هل هذا الحساب «فوق» بهذا السيرفر؟ (بسيرفرنا = ارثر/إيدا · بأي سيرفر ثاني = صاحب السيرفر/المسؤولين)
-function isTop(guild, member, tier, CONFIG = {}) {
+// ===== 👑 اللي فوق الكل (صاحب المشروع): ارثر وإيدا =====
+const superIds = (CONFIG) => [asId(cfg(CONFIG).ARTHUR_ID), asId(cfg(CONFIG).SPECIAL_USER_ID)].filter(Boolean);
+const superSet = (CONFIG) => new Set(superIds(CONFIG));
+const isSuper = (id, CONFIG) => superSet(CONFIG).has(asId(id));
+const isNova = (gid, CONFIG) => { const a = asId(gid), b = asId(cfg(CONFIG).GUILD_ID); return !!a && a === b; };
+
+// هل هذا الحساب «فوق» بهذا السيرفر؟ (بسيرفرنا = ارثر/إيدا · بأي سيرفر ثاني = المسؤولين)
+function isTop(guild, member, tier, CONFIG) {
     if (isNova(guild && guild.id, CONFIG)) return tier === 'arthur' || tier === 'ida';
     return isRoyal(guild, member, CONFIG);
 }
 
-// ===== اللي فوق الكل (صاحب المشروع): ارثر وإيدا =====
-const asId = (v) => String(v == null ? '' : v).trim();
-const superIds = (CONFIG = {}) => [asId(CONFIG.ARTHUR_ID), asId(CONFIG.SPECIAL_USER_ID)].filter(Boolean);
-const superSet = (CONFIG = {}) => new Set(superIds(CONFIG));
-const isSuper = (id, CONFIG = {}) => superSet(CONFIG).has(asId(id));
-const isNova = (gid, CONFIG = {}) => { const a = asId(gid), b = asId(CONFIG.GUILD_ID); return !!a && a === b; };
-
-// هل عنده صلاحية دخول لوحة هذا السيرفر؟ (فوق الكل يدخلون أي سيرفر)
-function has(gid, id, CONFIG = {}) {
+// هل عنده صلاحية دخول لوحة هذا السيرفر؟
+function has(gid, id, CONFIG) {
     if (isSuper(id, CONFIG)) return true;
     const uid = isId(id);
     return !!uid && list(gid).some(e => e.id === uid);
 }
 
-// ===== «الملكي» بهذا السيرفر =====
+// ===== 👑 «الملكي» بهذا السيرفر =====
 // سيرفرنا: ارثر · إيدا · الرتبة الملكية (نفس السلوك القديم بالضبط)
-// غيرنا  : صاحب السيرفر · واللي أنا عطيتهم صلاحية الدخول
-function isRoyal(guild, member, CONFIG = {}) {
+// غيرنا  : صاحب السيرفر · واللي أنا عطيتهم صلاحية الدخول — وبس لو السيرفر مفعّل
+function isRoyal(guild, member, CONFIG) {
     if (!guild || !member) return false;
     const uid = asId(member.id);
     if (!uid) return false;
     if (isSuper(uid, CONFIG)) return true;
+    if (!isApproved(guild.id, CONFIG)) return false;   // 🔒 سيرفر مقفول = ما فيه ملكي
     if (isNova(guild.id, CONFIG)) {
-        return !!(CONFIG.ROYAL_ROLE_ID && member.roles && member.roles.cache
-            && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID));
+        return !!(cfg(CONFIG).ROYAL_ROLE_ID && member.roles && member.roles.cache
+            && member.roles.cache.has(cfg(CONFIG).ROYAL_ROLE_ID));
     }
     if (asId(guild.ownerId) === uid) return true;
     return has(guild.id, uid, CONFIG);
 }
 
 // آيديات «الملكيين» بهذا السيرفر (للتنبيهات والخاص)
-function royalIds(guild, CONFIG = {}) {
+function royalIds(guild, CONFIG) {
     const out = new Set();
-    if (!guild) return [];
+    if (!guild || !isApproved(guild.id, CONFIG)) return [];
     if (isNova(guild.id, CONFIG)) {
         superIds(CONFIG).forEach(x => out.add(x));
     } else {
@@ -116,18 +163,19 @@ function royalIds(guild, CONFIG = {}) {
     return [...out];
 }
 
-// هل عنده صلاحية دخول لوحة هذا السيرفر؟ (فوق الكل · أو بالقائمة · أو صاحب السيرفر نفسه)
-function canUse(guild, id, CONFIG = {}) {
+// هل عنده صلاحية دخول لوحة هذا السيرفر؟ (فوق الكل · أو مفعّل + صاحبه/مسموح)
+function canUse(guild, id, CONFIG) {
     if (!guild) return false;
     const uid = asId(id);
     if (!uid) return false;
     if (isSuper(uid, CONFIG)) return true;
+    if (!isApproved(guild.id, CONFIG)) return false;         // 🔒 لازم السيرفر يتفعّل أول
     if (asId(guild.ownerId) === uid) return true;
     return list(guild.id).some(e => e.id === uid);
 }
 
 // السيرفرات اللي هذا الحساب يقدر يدخل لوحتها (فوق الكل → كل السيرفرات)
-function guildsOf(client, id, CONFIG = {}) {
+function guildsOf(client, id, CONFIG) {
     const uid = asId(id);
     const out = [];
     if (!client || !uid) return out;
@@ -137,22 +185,24 @@ function guildsOf(client, id, CONFIG = {}) {
     return out;
 }
 
-// هل يقدر يدير قائمة المسموحين بهذا السيرفر؟ (فوق الكل · أو صاحب السيرفر)
-function canManage(guild, id, CONFIG = {}) {
+// هل يقدر يدير قائمة المسموحين بهذا السيرفر؟
+// فوق الكل = أي سيرفر · صاحب السيرفر = سيرفره (بس بعد تفعيله) · قائمة سيرفرنا لك وإيدا بس
+function canManage(guild, id, CONFIG) {
     if (!guild) return false;
-    const uid = isId(id);
+    const uid = asId(id);
     if (!uid) return false;
     if (isSuper(uid, CONFIG)) return true;
-    if (isNova(guild.id, CONFIG)) return false;   // قائمة سيرفرنا ما يلمسها غيرنا
-    return isId(guild.ownerId) === uid;
+    if (isNova(guild.id, CONFIG)) return false;
+    if (!isApproved(guild.id, CONFIG)) return false;
+    return asId(guild.ownerId) === uid;
 }
 
-// اسم الشخصة الملكية بهذا السيرفر (للنصوص) — بسيرفرنا نذكر الأسماء، بغيره «إدارة السيرفر»
-const label = (gid, CONFIG = {}) => (isNova(gid, CONFIG) ? 'مولاي ارثر والملكة إيدا' : 'إدارة السيرفر');
-const royalWord = (gid, CONFIG = {}) => (isNova(gid, CONFIG) ? 'الرتبة الملكية' : 'إدارة السيرفر');
+// اسم الشخصة الملكية بهذا السيرفر (للنصوص)
+const label = (gid, CONFIG) => (isNova(gid, CONFIG) ? 'مولاي ارثر والملكة إيدا' : 'إدارة السيرفر');
+const royalWord = (gid, CONFIG) => (isNova(gid, CONFIG) ? 'الرتبة الملكية' : 'إدارة السيرفر');
 
-// تنقية النصوص: بسيرفرنا ما نغيّر شي · بأي سيرفر ثاني نشيل أسماء ارثر/إيدا ونوفا ونحوّلها لكلام عام
-function clean(text, guild, CONFIG = {}) {
+// تنقية النصوص: بسيرفرنا ما نغيّر شي · بأي سيرفر ثاني نشيل أسماء ارثر/إيدا ونوفا
+function clean(text, guild, CONFIG) {
     if (text == null) return text;
     let s = String(text);
     if (isNova(guild && guild.id, CONFIG)) return s;
@@ -168,31 +218,37 @@ function clean(text, guild, CONFIG = {}) {
         .replace(/يا\s*مولاي/g, 'يا طويل العمر');
 }
 
-// نص رفض الأمر حسب السيرفر (عشان ما نذكر ارثر/إيدا بغير سيرفرنا)
-function denyText(guild, CONFIG = {}) {
+// نصوص الرفض حسب السيرفر (عشان ما نذكر ارثر/إيدا بغير سيرفرنا)
+function denyText(guild, CONFIG) {
     const gid = guild ? guild.id : '';
     if (isNova(gid, CONFIG)) return '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅';
     return '⛔ هذا الأمر خاص بإدارة هذا السيرفر (صاحب السيرفر أو اللي عطاه صلاحية) فقط.';
 }
-function denyTextRanks(guild, CONFIG = {}) {
+function denyTextRanks(guild, CONFIG) {
     const gid = guild ? guild.id : '';
     if (isNova(gid, CONFIG)) return '⛔ هذا الأمر خاص بأهل الرتبة الملكية! 💅';
     return '⛔ هذا الأمر خاص بإدارة هذا السيرفر فقط.';
 }
-// نص رفض خاص بأمر «لوحة التحكم» (بسيرفرنا يذكر الأسماء مثل قبل بالضبط)
-function denyTextRoyal(guild, CONFIG = {}) {
+function denyTextRoyal(guild, CONFIG) {
     const gid = guild ? guild.id : '';
     if (isNova(gid, CONFIG)) return '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا والرتبة الملكية.';
     return '⛔ هذا الأمر خاص بإدارة هذا السيرفر فقط.';
 }
-function denyTextOwner(guild, CONFIG = {}) {
+function denyTextOwner(guild, CONFIG) {
     const gid = guild ? guild.id : '';
     if (isNova(gid, CONFIG)) return '⛔ هذا الأمر خاص بمولاي ارثر والملكة إيدا فقط! 👑';
     return '⛔ هذا الأمر خاص بإدارة هذا السيرفر فقط.';
 }
+// 🔒 نص القفل (السيرفر مو مفعّل)
+const denyTextLocked = '🔒 هذا البوت مقفل في هذا السيرفر.\nلتفعيله تواصل مع إدارة نوفا — بعد التفعيل يشتغل كل شي تلقائياً.';
 
 module.exports = {
-    FILE, list, add, remove, clear, has, isSuper, superIds, superSet, isNova,
-    isRoyal, royalIds, guildsOf, canUse, canManage, label, royalWord, clean, isTop,
-    denyText, denyTextRanks, denyTextOwner, denyTextRoyal
+    FILE,
+    // 🔒 القفل
+    boot, isApproved, approve, approvedList, canRun, denyTextLocked,
+    // 🔑 الصلاحية
+    list, add, remove, clear, has, canUse, canManage, guildsOf,
+    // 👑 الرتب
+    isSuper, superIds, superSet, isNova, isRoyal, royalIds, isTop,
+    label, royalWord, clean, denyText, denyTextRanks, denyTextOwner, denyTextRoyal
 };

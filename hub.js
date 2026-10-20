@@ -279,6 +279,7 @@ async function send(guild, gid, { resend = false } = {}) {
 // عند كل إقلاع: نتأكد الرسالة موجودة ومحدّثة (ولو انحذفت نرسلها من جديد) — لكل سيرفر مفعّل فيه
 async function ensure(client, CONFIG) {
     for (const g of client.guilds.cache.values()) {
+        if (!access.isApproved(g.id, CONFIG)) continue;   // 🔒 سيرفر مقفول = ما نرسل له لوحة
         const cfg = get(g.id);
         if (!cfg.enabled || !cfg.channelId) continue;
         try {

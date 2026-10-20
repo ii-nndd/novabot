@@ -49,7 +49,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-20.2';
+const BUILD = '2026-10-20.3';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -304,9 +304,9 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','super'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','super'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
-function navOk(n,d){var k=n[3];if(!k)return true;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
+function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -1227,7 +1227,7 @@ if(!d.guild||!(d.guilds||[]).length){r.appendChild(guildPicker(d));return}
 var logo=el('div',{class:'logo'});logo.innerHTML=NOVA_MARK_SVG+'<span>'+d.guild.name.slice(0,22)+'</span>';
 var sb=el('div',{class:'sb'},[logo].concat(NAV.filter(function(n){return navOk(n,d)}).map(function(n){
   if(n.length===1)return el('div',{class:'navlab',text:n[0].slice(1)});
-  var b=el('button',{class:'nav','data-p':n[0]},[el('span',{class:'ic',text:n[1]}),el('span',{text:n[2]})].concat(n[3]==='super'?[el('span',{style:'margin-inline-start:auto;font-size:11px;opacity:.85',text:'👑'})]:[]));
+  var b=el('button',{class:'nav','data-p':n[0]},[el('span',{class:'ic',text:n[1]}),el('span',{text:n[2]})].concat(n[3]==='super'||n[3]==='root'?[el('span',{style:'margin-inline-start:auto;font-size:11px;opacity:.85',text:'👑'})]:[]));
   b.addEventListener('click',function(){show(n[0])});return b})).concat([
   el('a',{class:'nav',href:'/auth/logout'},[el('span',{class:'ic',text:'🚪'}),el('span',{text:'خروج ('+d.user.name+')'})])
 ]));
@@ -1247,10 +1247,44 @@ r.appendChild(el('div',{class:'app'},[sb,el('div',{class:'wrap'},[tb,el('div',{c
 show('overview');
 api('ping').then(function(p){pill.className='pill '+(p.bot?'on':'off');pill.innerHTML='';pill.appendChild(el('span',{class:'pdot'}));pill.appendChild(el('span',{text:(p.bot?'البوت متصل ٢٤/٧':'البوت غير جاهز')+' • مدة التشغيل '+p.mins+' دقيقة'}))}).catch(function(){pill.className='pill off';pill.innerHTML='';pill.appendChild(el('span',{class:'pdot'}));pill.appendChild(el('span',{text:'تعذّر فحص الاتصال'}))});
 }).catch(function(e){document.body.textContent=e.message})}
+// ===== 🌐 السيرفرات: البوت مقفول افتراضياً — مين يشتغل ومين لا (فوق الكل فقط) =====
+pages.guilds=function(m){return api('guilds').then(function(d){
+ m.appendChild(el('h1',{text:'السيرفرات 🌐'}));
+ m.appendChild(el('div',{class:'mut',text:'🔒 البوت مقفول افتراضياً: أي سيرفر جديد يضيف البوت يظل مقفول — ما يرد، ولا تنزل أوامره، ولا تنفتح لوحته — إلا لما تفعّله من هنا. (سيرفرنا مفعّل دايماً.)'}));
+ var box=el('div',{});
+ (d.guilds||[]).forEach(function(g){
+  var on=!!g.approved;
+  var btn=el('button',{class:'btn '+(on?'dn':''),text:on?'🔒 اقفل':'🔓 فعّل'});
+  btn.addEventListener('click',function(){
+   btn.disabled=true;
+   api('guilds/approve',{id:g.id,on:!on}).then(function(){
+    toast(on?'🔒 انقفل السيرفر':'🔓 انفعّل السيرفر ('+(g.name||'')+')');
+    show('guilds');
+   }).catch(function(e){btn.disabled=false;toast(e.message,1)});
+  });
+  var open=el('button',{class:'b2',text:'فتح لوحته'});
+  open.addEventListener('click',function(){
+   api('guild',{id:g.id}).then(function(){location.reload()}).catch(function(e){toast(e.message,1)});
+  });
+  box.appendChild(el('div',{class:'item'},[
+   el('span',{class:'ic',text:g.nova?'👑':'🏠'}),
+   el('div',{style:'flex:1;min-width:0;text-align:right'},[
+    el('div',{class:'nm',text:g.name}),
+    el('div',{class:'mut',style:'font-size:12px',text:'👥 '+(g.members||0)+' عضو · 🔑 '+(g.allowed||0)+' مسموح'+(g.nova?' · سيرفرنا':'')})
+   ]),
+   el('span',{class:'tag '+(on?'on':'off'),text:on?'✅ مفعّل':'🔒 مقفول'}),
+   btn, open
+  ]));
+ });
+ m.appendChild(card('كل السيرفرات ('+(d.total||0)+') · المفعّلة: '+(d.active||0),box));
+ m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;font-size:12px;line-height:1.9',text:'فعّل السيرفر → تنزل أوامره فوراً ويصير شغال. اقفله → تنمسح أوامره ويتوقف عن الرد (وبعدها يقدر صاحبه يدخل لوحته ويضيف مسؤولينه من «صلاحية الدخول 🔑»).'}));
+ return;
+})}
 // ===== 🔑 صلاحية الدخول للوحة (لكل سيرفر لحاله) =====
 pages.access=function(m){return api('access').then(function(d){
  m.appendChild(el('h1',{text:'صلاحية الدخول للوحة'}));
  m.appendChild(el('div',{class:'mut',text:'اللوحة ما تنفتح بالرابط — اللي تضيفه هنا بس هو اللي يقدر يدخل لوحة هذا السيرفر ويدير أنظمته. وإدارة نوفا (ارثر/إيدا) تدخل كل السيرفرات دايماً.'}));
+ if(d.approved===false){m.appendChild(card('🔒 السيرفر مقفول',el('div',{class:'mut',style:'line-height:1.9',text:'هذا السيرفر ما فعّلناه بعد — البوت فيه ما يرد ولا تنزل أوامره. فعّله من صفحة «السيرفرات 🌐» (لإدارة نوفا) وبعدها يصير كل شي شغال.'})));}
  if(!(d.canManage||d.isSuper)){m.appendChild(card('ما عندك صلاحية',el('div',{class:'mut',text:'تعديل قائمة الدخول يسويه صاحب السيرفر أو إدارة نوفا فقط.'})));return}
  var byId=el('input',{placeholder:'آيدي الحساب (أرقام فقط)',style:'flex:1;min-width:180px'});
  var addId=el('button',{class:'btn',text:'➕ إضافة بالآيدي'});
@@ -1307,7 +1341,7 @@ function guildPicker(d){var m=el('div',{class:'main'},[el('div',{class:'hero'},[
   box.appendChild(b);
  });
  m.appendChild(card('سيرفراتك',box));
- if(!(d.guilds||[]).length)m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;line-height:1.9',text:'ما عندك صلاحية دخول لوحة أي سيرفر حالياً. اللوحة ما تنفتح بالرابط — لازم إدارة السيرفر تعطيك صلاحية الدخول من صفحة «صلاحية الدخول 🔑»، وبعدها سجّل دخولك من جديد.'}));
+ if(!(d.guilds||[]).length)m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;line-height:1.9',text:'ما عندك صلاحية دخول لوحة أي سيرفر حالياً. اللوحة ما تنفتح بالرابط — لازم إدارة نوفا تعطيك صلاحية الدخول من صفحة «صلاحية الدخول 🔑». (وإذا سيرفرك جديد: البوت مقفول افتراضياً ولازم إدارة نوفا تفعّله من «السيرفرات 🌐» أول.)'}));
  m.appendChild(el('div',{class:'row',style:'margin-top:10px'},[el('a',{class:'b2',href:'/auth/logout',text:'🚪 خروج ('+d.user.name+')'})]));
  return m}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(function(){});
@@ -2241,6 +2275,38 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         return { winners: winners.length };
     }));
 
+    // ===== 🌐 السيرفرات (فوق الكل فقط): مين البوت شغال فيه ومين مقفول =====
+    const rootOnly = (fn) => async (req, res) => {
+        const s = session(req);
+        if (!s || !access.isSuper(s.id, CONFIG)) return res.status(403).json({ error: 'هذي الصفحة خاصة بصاحب البوت فقط 👑' });
+        try { return await fn(s, req, res); }
+        catch (e) { res.status(400).json({ error: String(e.message || 'خطأ').slice(0, 150) }); }
+    };
+    api.get('/guilds', rootOnly(async (s, req, res) => {
+        const arr = [...client.guilds.cache.values()].map(g => ({
+            id: g.id, name: g.name, icon: g.iconURL({ size: 64 }) || '',
+            members: g.memberCount || 0, ownerId: g.ownerId,
+            approved: access.isApproved(g.id, CONFIG),
+            nova: String(g.id) === String(CONFIG.GUILD_ID),
+            allowed: access.list(g.id).length
+        })).sort((a, b) => (b.members || 0) - (a.members || 0));
+        res.json({ guilds: arr, total: arr.length, active: arr.filter(x => x.approved).length });
+    }));
+    api.post('/guilds/approve', rootOnly(async (s, req, res) => {
+        const gid = String((req.body && req.body.id) || '').trim();
+        const on = !!(req.body && req.body.on);
+        const g = client.guilds.cache.get(gid);
+        if (!g) return res.status(400).json({ error: 'السيرفر مو موجود (البوت مو فيه)' });
+        if (String(gid) === String(CONFIG.GUILD_ID) && !on) return res.status(400).json({ error: 'سيرفر نوفا ما ينقفل أبداً' });
+        access.approve(gid, on, s.id, g.name);
+        // 🔁 نزامن الأوامر فوراً: مفعّل → تنزل · مقفول → تنمسح
+        try { if (typeof client.syncGuildCommands === 'function') await client.syncGuildCommands(g); } catch {}
+        const l = store.read('dashlog.json', []);
+        l.unshift({ at: Date.now(), by: s.name, gid, msg: (on ? '🔓 تفعيل السيرفر: ' : '🔒 قفل السيرفر: ') + g.name });
+        store.write('dashlog.json', l.slice(0, 300));
+        res.json({ ok: true, id: gid, approved: on });
+    }));
+
     // ===== 🔑 صلاحية الدخول للوحة: من يدخل لوحة هذا السيرفر (أنا اللي أعطيها) =====
     api.get('/access', h(async (g, b, req) => {
         const s = session(req);
@@ -2249,6 +2315,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             canManage: access.canManage(g, s.id, CONFIG),
             isSuper: access.isSuper(s.id, CONFIG),
             nova: access.isNova(g.id, CONFIG),
+            approved: access.isApproved(g.id, CONFIG),
             ownerId: g.ownerId,
             guild: { id: g.id, name: g.name, icon: g.iconURL({ size: 64 }) || '' },
             superIds: access.superIds(CONFIG)

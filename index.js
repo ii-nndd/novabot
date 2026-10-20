@@ -54,6 +54,9 @@ const CONFIG = {
     DISRESPECT_ROLE_ID: '1559161253249949776'
 };
 
+// 🔒 نسجّل الإعدادات بنظام الصلاحية/القفل (access) — عشان أي ملف يقدر يسأل «هذا السيرفر مفعّل؟»
+access.boot(CONFIG);
+
 // ====================================================================
 // 2. سيرفر الويب (للفحص المستمر من الاستضافة)
 // ====================================================================
@@ -281,19 +284,40 @@ const commands = [
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
 ].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands, hub.commands);
 
+// 🔁 مزامنة أوامر سيرفر واحد:
+//    مفعّل → تنزل كل الأوامر · مقفول 🔒 → تنمسح أوامره (ما يقدر أحد يجرّب البوت)
+//    (اللوحة تناديها لما تفعّل/تقفل سيرفر — فالتغيير يصير فوراً بدون إعادة تشغيل)
+client.novaCommands = commands;
+client.syncGuildCommands = async (g) => {
+    if (!g) return false;
+    try {
+        await g.commands.set(access.isApproved(g.id, CONFIG) ? commands : []);
+        return true;
+    } catch (e) {
+        console.error(`❌ مزامنة أوامر ${g.name || g.id}:`, e.message);
+        return false;
+    }
+};
+
 // ====================================================================
 // 7. تشغيل البوت (جاهز للعمل + إعادة التشغيل التلقائي)
 // ====================================================================
 let systemsReady = false;   // الأنظمة تُهيأ مرة واحدة فقط (عشان ما تتكرر عند إعادة الاتصال)
 async function onClientReady() {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
-    // 🌐 الأوامر لكل سيرفر البوت فيه (مو سيرفرنا بس) — عشان أي سيرفر جديد تلاقي عنده الأوامر
-    let regd = 0;
+    // 🌐 الأوامر لكل سيرفر البوت فيه — **بس السيرفرات المفعّلة**.
+    // 🔒 أي سيرفر جديد يظل مقفول (بدون أوامر ولا ردود) لحد ما نفعّله من اللوحة.
+    let regd = 0, locked = 0;
     for (const g of client.guilds.cache.values()) {
-        try { await g.commands.set(commands); regd++; }
-        catch (err) { console.error(`❌ فشل تسجيل الأوامر بسيرفر ${g.name || g.id}:`, err.message); }
+        if (access.isApproved(g.id, CONFIG)) {
+            try { await g.commands.set(commands); regd++; }
+            catch (err) { console.error(`❌ فشل تسجيل الأوامر بسيرفر ${g.name || g.id}:`, err.message); }
+        } else {
+            locked++;
+            try { await g.commands.set([]); } catch {}
+        }
     }
-    console.log(`✅ تم تسجيل أوامر السلاش في ${regd} سيرفر`);
+    console.log(`✅ تم تسجيل أوامر السلاش في ${regd} سيرفر${locked ? ` · 🔒 ${locked} سيرفر مقفول (ما تنزل له أوامر)` : ''}`);
 
     if (!systemsReady) {
         systemsReady = true;
@@ -317,18 +341,26 @@ async function onClientReady() {
 }
 client.on('clientReady', onClientReady);
 
-// 🌐 سيرفر جديد أضاف البوت: نجهّز له الأوامر + ننبّه صاحب المشروع يعطيه صلاحية الدخول للوحة
+// 🌐 سيرفر جديد أضاف البوت: 🔒 يظل **مقفول** — ما يرد ولا تنزل أوامره
+//    إلا لما **ارثر/إيدا يفعّلونه** من اللوحة («السيرفرات 🌐» ← تفعيل)
 client.on('guildCreate', async (guild) => {
-    console.log(`➕ دخلت سيرفر جديد: ${guild.name} (${guild.id})`);
-    try { await guild.commands.set(commands); } catch (e) { console.error('❌ فشل تسجيل أوامر السيرفر الجديد:', e.message); }
-    // رسالة ترحيب بصاحب السيرفر الجديد تشرح له إن عنده لوحة
+    console.log(`➕ دخلت سيرفر جديد: ${guild.name} (${guild.id}) — 🔒 مقفول لحد ما يفعّله ارثر/إيدا`);
+    // نمسح أي أوامر قديمة (احتياط) — ما فيه شي يشتغل بهالسيرفر
+    try { await client.syncGuildCommands(client.guilds.cache.get(guild.id) || guild); } catch {}
+    // ١) ننبّه أصحاب البوت (ارثر/إيدا) عشان يفعّلونه
+    const note = `➕ دخلت سيرفر جديد: **${guild.name}**\nآيديه: \`${guild.id}\``
+        + `\n👥 ${guild.memberCount || '؟'} عضو · 🔒 البوت **مقفول** فيه (ما يرد ولا تنزل أوامره).`
+        + `\nلتفعيله: اللوحة ← «السيرفرات 🌐» ← تفعيل.`;
+    for (const id of access.superIds(CONFIG)) {
+        try { const u = await client.users.fetch(id); await u.send(note); } catch {}
+    }
+    // ٢) نطمّن صاحب السيرفر الجديد ونقول له البوت مقفول
     try {
         const o = await guild.fetchOwner().catch(() => null);
         if (o) await o.send(
-            `أهلاً! أنا **العبد 🐾** بوت نوفا، صرت معكم بسيرفر **${guild.name}**.\n`
-            + `عندكم **لوحة تحكم كاملة** لكل أنظمة البوت (رتب · ترحيب · مستويات · اقتصاد · قرعات · تذاكر · حماية…).\n`
-            + `اللوحة **ما تنفتح بالرابط** — لازم إدارة نوفا تعطيك صلاحية دخول أول، وبعدها تدخل وتدير سيرفرك.\n`
-            + `📜 اكتب \`/مساعدة\` بالروم تشوف كل الأوامر.`
+            `أهلاً! أنا **العبد 🐾** — بوت نوفا.\n`
+            + `انضفت لسيرفر **${guild.name}**، لكن البوت **مقفول** حالياً 🔒 — ما يرد ولا تنزل أوامره.`
+            + `\nلطلب التفعيل تواصل مع إدارة نوفا (صاحب البوت).`
         ).catch(() => {});
     } catch { }
 });
@@ -349,6 +381,14 @@ const rpsNames = { rock: '🪨 حجر', paper: '📄 ورقة', scissors: '✂�
 const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
+    // 🔒 سيرفر مقفول = ما فيه أي تفاعل (ولا حتى أزرار القرعات والتذاكر).
+    //    الأوامر أصلاً ما تنزل له، وهذا احتياط لو بقت نسخة قديمة مسجّلة عند ديسكورد.
+    if (interaction.guild && !access.canRun(interaction.guild.id, interaction.user && interaction.user.id, CONFIG)) {
+        if (interaction.isChatInputCommand() && !interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: access.denyTextLocked, flags: 64 }).catch(() => {});
+        }
+        return;
+    }
     if (interaction.isButton()) {
         if (await tickets.handleButton(interaction, { getTier, CONFIG, pick, access })) return;
         if (await giveaway.handleButton(interaction)) return;
@@ -613,6 +653,10 @@ async function handleChannelToggle(message) {
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
+
+    // 🔒 سيرفر مقفول (ما فعّلناه من اللوحة) = تجاهل كامل: ولا رد، ولا خبرة، ولا أي نظام.
+    //    (ارثر/إيدا مستثنين عشان يقدرون يجرّبون بأي مكان)
+    if (!access.canRun(message.guild.id, message.author.id, CONFIG)) return;
 
     // أوامر تفعيل/تعطيل البوت بالروم: تشتغل حتى لو الروم معطّل عشان تقدر ترجع البوت بأمر
     if (await handleChannelToggle(message)) return;
