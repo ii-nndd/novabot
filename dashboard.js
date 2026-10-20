@@ -51,7 +51,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-20.5';
+const BUILD = '2026-10-20.6';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -467,13 +467,13 @@ function entryEditor(s,e){
  var box=el('div');
  var t=el('input',{value:e.t,style:'width:100%'});
  var r=el('textarea',{style:'width:100%;min-height:90px;margin-top:6px'});
- r.value=(e.r||[]).join('\n');
+ r.value=(e.r||[]).join('\\n');
  var md=el('select',{style:'margin-top:8px'},[opt('contains','🔍 داخل الكلام'),opt('exact','🎯 مطابقة تامة')]);md.value=e.mode;
  var sv=el('button',{class:'btn',text:'💾 حفظ الرد'}),cx=el('button',{class:'b2',text:'✖ إلغاء'});
  cx.addEventListener('click',function(){draw()});
  sv.addEventListener('click',function(){
   sv.disabled=true;
-  api('rep2/entry',{act:'edit',sid:s.id,eid:e.id,patch:{t:t.value,mode:md.value,r:String(r.value||'').split('\n').map(function(x){return x.trim()}).filter(Boolean)}})
+  api('rep2/entry',{act:'edit',sid:s.id,eid:e.id,patch:{t:t.value,mode:md.value,r:String(r.value||'').split('\\n').map(function(x){return x.trim()}).filter(Boolean)}})
    .then(function(x){secs=x.sections;toast('انحفظ ✅');draw()}).catch(function(z){sv.disabled=false;toast(z.message,1)})});
  box.appendChild(el('div',{class:'mut',text:'كلام العضو'}));box.appendChild(t);
  box.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'رد البوت — كل سطر = رد (يختار عشوائي)'}));box.appendChild(r);
@@ -549,13 +549,13 @@ function drawLegacy(){
   pane.appendChild(el('div',{class:'kv'},[el('span',{class:'tag mono',text:lkey}),D.custom[lkey]?el('span',{class:'tag on',text:'معدّل يدوياً'}):el('span',{class:'tag',text:'افتراضي'})]));
   var h=rhint(lkey);if(h)pane.appendChild(el('div',{class:'mut',style:'margin:4px 0 8px',text:h}));
   var ta=el('textarea',{spellcheck:'false',style:'min-height:320px;width:100%'});
-  ta.value=(D.all[lkey]||[]).join('\n');pane.appendChild(ta);
+  ta.value=(D.all[lkey]||[]).join('\\n');pane.appendChild(ta);
   var cnt=el('div',{class:'mut',style:'margin-top:6px'});
-  function up(){cnt.textContent='عدد الردود: '+ta.value.split('\n').filter(function(x){return x.trim()}).length}
+  function up(){cnt.textContent='عدد الردود: '+ta.value.split('\\n').filter(function(x){return x.trim()}).length}
   up();ta.addEventListener('input',up);pane.appendChild(cnt);
   var sv=el('button',{class:'btn',text:'💾 حفظ'}),rs=el('button',{class:'b2',text:'↩️ الافتراضي / حذف'});
   sv.addEventListener('click',function(){sv.disabled=true;
-   api('replies/save',{key:lkey,lines:ta.value.split('\n')}).then(function(r){lg={all:r.all,custom:r.custom};toast('انحفظ ✅');draw()}).catch(function(e){sv.disabled=false;toast(e.message,1)})});
+   api('replies/save',{key:lkey,lines:ta.value.split('\\n')}).then(function(r){lg={all:r.all,custom:r.custom};toast('انحفظ ✅');draw()}).catch(function(e){sv.disabled=false;toast(e.message,1)})});
   rs.addEventListener('click',function(){if(!confirm('رجوع للردود الافتراضية؟ (لو تصنيف أنشأته إنت، بينحذف كامل)'))return;
    api('replies/reset',{key:lkey}).then(function(r){lg={all:r.all,custom:r.custom};toast('رجع للافتراضي');draw()}).catch(function(e){toast(e.message,1)})});
   pane.appendChild(el('div',{class:'row',style:'gap:8px;margin-top:10px'},[sv,rs]));
