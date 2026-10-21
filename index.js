@@ -178,9 +178,9 @@ const voiceTargetId = () => botcontrol.voiceChannelId(CONFIG.GUILD_ID, CONFIG.VO
 
 const isInVoice = () => !!connection && connection.state.status === VoiceConnectionStatus.Ready;
 
-async function connectToVoice(force = false, wantedId = '') {
+async function connectToVoice(force = false) {
     if (connecting) return;
-    const targetId = String(wantedId || '') || voiceTargetId();
+    const targetId = voiceTargetId();
     if (!targetId) return;
     // لو متصل أصلاً بنفس الروم المطلوب، ما نسوي شي (إلا لو force)
     if (!force && isInVoice() && currentVoiceId === targetId) return;
@@ -253,7 +253,7 @@ async function comeToMe(member) {
             ? { voiceEnabled: true, voiceChannelId: target.id }
             : { voiceEnabled: true });
     } catch (e) { console.error('❌ حفظ روم الفويس:', e.message); }
-    await connectToVoice(true, target ? target.id : '');
+    await connectToVoice(true);
     return target;
 }
 
