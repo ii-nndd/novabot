@@ -51,7 +51,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-21.1';
+const BUILD = '2026-10-21.2';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -611,7 +611,7 @@ vc.appendChild(el('div',{class:'row'},[
   el('button',{class:'btn',text:'🎙️ دخول الفويس الآن',on:{click:function(){go(api('bot/voice',{action:'join'}),'البوت دخل الفويس ✅','bot')}}}),
   el('button',{class:'dn',text:'🚪 خروج من الفويس',on:{click:function(){go(api('bot/voice',{action:'leave'}),'البوت طلع من الفويس ✅','bot')}}})
 ]));
-vc.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'التحكم السريع: /تعال و /اطع، أو بالكلام "يا عبد تعال" و "يا عبد اطلع". وفك/تشغيل البوت في الروم الكتابي: "يا عبد فك البوت" و "يا عبد شغل البوت".'}));
+vc.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'التحكم السريع: /تعال و /اطع، أو بالكلام "يا عبد تعال" و "يا عبد اطلع". «تعال» = البوت يجي عندك في رومك الصوتي (ويثبت فيه 24/7)، ولو مو بفويس يدخل الروم المحدد فوق. وفك/تشغيل البوت في الروم الكتابي: "يا عبد فك البوت" و "يا عبد شغل البوت".'}));
 m.appendChild(vc);
 return Promise.resolve()})};
 pages.channels=function(m){return api('channels').then(function(d){

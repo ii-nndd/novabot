@@ -50,6 +50,8 @@ const defs = [
     [cmd('تحذير', 'إعطاء تحذير لعضو').addUserOption(member)
         .addStringOption(o => o.setName('السبب').setDescription('السبب').setRequired(true).setMaxLength(200)), 'royal'],
     [cmd('تحذيرات', 'عرض تحذيرات عضو').addUserOption(member), 'royal'],
+    [cmd('شيل_تحذير', 'إزالة تحذير (أو كل التحذيرات) من عضو').addUserOption(member)
+        .addIntegerOption(o => o.setName('كم').setDescription('كم تحذير أشيل؟ (فاضي = 1 · 0 = كل التحذيرات)').setMinValue(0).setMaxValue(50)), 'royal'],
     [cmd('معلومات_عضو', 'معلومات عن عضو').addUserOption(o => o.setName('عضو').setDescription('العضو')), 'royal'],
     [cmd('معلومات_سيرفر', 'معلومات عن السيرفر'), 'royal'],
     [cmd('سجن', 'سجن عضو (يشوف روم السجن بس، لازم تضبط النظام من /dashboard أول)').addUserOption(member).addStringOption(reasonOpt), 'royal'],
@@ -258,6 +260,21 @@ async function run(i, tier, ctx) {
             if (!list.length) return i.reply({ content: `✅ ${t} ما عنده تحذيرات.`, flags: EPH });
             const txt = list.slice(-10).map((w, k) => `**${k + 1}.** ${w.why} (${ts(w.at)})`).join('\n');
             return i.reply({ content: `⚠️ تحذيرات ${t} (${list.length}):\n${txt}`, flags: EPH });
+        }
+        case 'شيل_تحذير': {
+            const t = tgt();
+            if (!t) return fail(i, 'ما لقيت العضو بالسيرفر.');
+            const db = store.read('warnings.json', {});
+            const key = `${g.id}:${t.id}`;
+            const list = db[key] || [];
+            if (!list.length) return i.reply({ content: `✅ ${t} ما عنده تحذيرات أصلاً — ما فيه شي أشيله.`, flags: EPH });
+            const ask = o.getInteger('كم');
+            const count = ask === 0 ? list.length : Math.min(list.length, Math.max(1, ask || 1));
+            list.splice(list.length - count, count);          // نشيل الأحدث أول
+            if (list.length) db[key] = list; else delete db[key];
+            store.write('warnings.json', db);
+            const left = list.length;
+            return done(i, ctx, `🧹 انشال **${count}** تحذير من ${t}\nالباقي عنده: **${left}**${left ? '' : ' — صار نظيف ✅'}`);
         }
         case 'معلومات_عضو': {
             const m = o.getMember('عضو') || i.member;

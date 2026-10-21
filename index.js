@@ -178,9 +178,9 @@ const voiceTargetId = () => botcontrol.voiceChannelId(CONFIG.GUILD_ID, CONFIG.VO
 
 const isInVoice = () => !!connection && connection.state.status === VoiceConnectionStatus.Ready;
 
-async function connectToVoice(force = false) {
+async function connectToVoice(force = false, wantedId = '') {
     if (connecting) return;
-    const targetId = voiceTargetId();
+    const targetId = String(wantedId || '') || voiceTargetId();
     if (!targetId) return;
     // لو متصل أصلاً بنفس الروم المطلوب، ما نسوي شي (إلا لو force)
     if (!force && isInVoice() && currentVoiceId === targetId) return;
@@ -243,6 +243,20 @@ function disconnectFromVoice() {
     currentVoiceId = '';
 }
 
+// 🎙️ «تعال» = البوت يجي عند اللي ناداه (لو هو داخل روم صوتي) — ويحفظ نفس الروم
+// عشان يبقى فيه 24/7 (الحارس يرجع البوت لهالروم). لو اللي نادى مو بفويس → الروم المحفوظ.
+async function comeToMe(member) {
+    const ch = member && member.voice && member.voice.channel;
+    const target = ch && typeof ch.isVoiceBased === 'function' && ch.isVoiceBased() ? ch : null;
+    try {
+        botcontrol.set(CONFIG.GUILD_ID, target
+            ? { voiceEnabled: true, voiceChannelId: target.id }
+            : { voiceEnabled: true });
+    } catch (e) { console.error('❌ حفظ روم الفويس:', e.message); }
+    await connectToVoice(true, target ? target.id : '');
+    return target;
+}
+
 // حارس: كل دقيقة يتأكد إن البوت بالروم الصوتي الصح، وإلا يرجعه/ينقله
 setInterval(() => {
     if (connecting) return;
@@ -272,7 +286,7 @@ client.voiceInfo = () => ({ inVoice: isInVoice(), channelId: currentVoiceId || '
 // 6. تعريف أوامر السلاش
 // ====================================================================
 const commands = [
-    new SlashCommandBuilder().setName('تعال').setDescription('يدخل البوت الفويس (للملكيين فقط)'),
+    new SlashCommandBuilder().setName('تعال').setDescription('البوت يجي عندك في رومك الصوتي (للملكيين فقط)'),
     new SlashCommandBuilder().setName('اطلع').setDescription('يطلع البوت من الفويس (للملكيين فقط)'),
     new SlashCommandBuilder().setName('حالة').setDescription('حالة البوت'),
     new SlashCommandBuilder().setName('نكتة').setDescription('نكتة من العبد'),
@@ -458,11 +472,13 @@ client.on('interactionCreate', async (interaction) => {
 
     try {
         switch (name) {
-            case 'تعال':
+            case 'تعال': {
                 if (!hasAccess(tier)) return denied();
-                botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: true });
-                connectToVoice(true);
-                return say('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
+                const ch = await comeToMe(interaction.member);
+                return say(ch
+                    ? `🫡 أبشر يا طويل العمر، جيت عندك في **${ch.name}** 🎙️`
+                    : '🫡 أبشر، دخلت الفويس المحدد 🎙️\n(ادخل روم صوتي وقل «يا عبد تعال» وأجيك عندك على طول)');
+            }
 
             case 'اطلع':
                 if (!hasAccess(tier)) return denied();
@@ -584,7 +600,7 @@ client.on('interactionCreate', async (interaction) => {
                         { name: '💰 اقتصاد ونقاط', value: '`/نقاطي` `/رتبة` `/rank` `/المتصدرين` `/يومي` `/رصيد` `/تحويل` `/المتجر` `/شراء`' },
                         { name: '🎉 فعاليات', value: '`/قرعة_بدء` `/قرعة_انهاء` `/رتب_لوحة`' },
                         { name: '📊 عام', value: '`/حالة` `/بينج` `/فلوس` `/سيرفر`' },
-                        { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
+                        { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/شيل_تحذير` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
                         { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20** / **يا عبد الألوان** (يولّد صورة الألوان ويحدّث البانل)، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
                     );
                 return say({ embeds: [helpEmbed] });
@@ -796,8 +812,10 @@ client.on('messageCreate', async (message) => {
     // أوامر بالكلام: يا عبد + اسم الأمر
     if (w('تعال', 'ادخل', 'دخلني')) {
         if (!canAdmin) return deny();
-        botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: true }); connectToVoice(true);
-        return say('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
+        const ch = await comeToMe(message.member);
+        return say(ch
+            ? `🫡 أبشر يا طويل العمر، جيت عندك في **${ch.name}** 🎙️`
+            : '🫡 أبشر، دخلت الفويس المحدد 🎙️\n(ادخل روم صوتي وقل «يا عبد تعال» وأجيك عندك على طول)');
     }
     if (w('اطلع', 'اخرج')) {
         if (!canAdmin) return deny();

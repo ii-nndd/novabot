@@ -21,6 +21,7 @@ const KEYWORDS = [
     [['رتبهاضافه', 'اعطرتبه', 'اضفرتبه'], 'رتبة_اضافة'],
     [['رتبهازاله', 'اسحبرتبه', 'شيلرتبه'], 'رتبة_ازالة'],
     [['لقب', 'غيرلقب', 'غيراللقب'], 'لقب'],
+    [['شيلتحذير', 'شيل تحذير', 'شيلالتحذير', 'امسحتحذير', 'امسح تحذير', 'احذفتحذير', 'الغيتحذير', 'رفعتحذير', 'شيلانذار'], 'شيل_تحذير'],
     [['تحذيرات'], 'تحذيرات'],
     [['تحذير', 'انذار', 'حذر'], 'تحذير'],
     [['معلوماتعضو', 'معلومات عضو'], 'معلومات_عضو'],
@@ -29,6 +30,11 @@ const KEYWORDS = [
 
 function findCommand(rawContent) {
     const flat = nz(rawContent).replace(/[^\u0600-\u06FF\s]/g, ' ');
+    // «شيل/امسح/احذف تحذير(ات)» = إزالة تحذيرات — لازم تُفحص قبل أي كلمة ثانية
+    // (وإلا «شيل تحذيرات» تنطابق مع «شيل تحذير» أو مع أمر «تحذيرات» للعرض)
+    if (/(شيل|امسح|احذف|الغ|رفع|ارفع|ازال|انزل)\s*(كل\s*)?(ال)?(تحذيرات|تحذير|انذار)/.test(flat)) {
+        return { name: 'شيل_تحذير', word: 'شيل تحذير' };
+    }
     for (const [words, name] of KEYWORDS) {
         for (const w of words) {
             if (flat.includes(nz(w))) return { name, word: w };
@@ -61,7 +67,7 @@ function extractReason(content, extras) {
     return t || null;
 }
 
-const NEEDS_TARGET = new Set(['طرد', 'حظر', 'ميوت', 'فك_ميوت', 'تحذير', 'تحذيرات', 'لقب', 'رتبة_اضافة', 'رتبة_ازالة', 'سجن', 'فك_سجن']);
+const NEEDS_TARGET = new Set(['طرد', 'حظر', 'ميوت', 'فك_ميوت', 'تحذير', 'تحذيرات', 'شيل_تحذير', 'لقب', 'رتبة_اضافة', 'رتبة_ازالة', 'سجن', 'فك_سجن']);
 const NEEDS_ROLE = new Set(['رتبة_اضافة', 'رتبة_ازالة']);
 
 async function handle(message, tier, ctx, admin) {
@@ -127,6 +133,10 @@ async function handle(message, tier, ctx, admin) {
                     return m ? Math.min(100, Math.max(1, parseInt(m[1], 10))) : 10;
                 }
                 if (name === 'الثواني') return (dur && dur.seconds) || 0;
+                if (name === 'كم') {
+                    const m = noMentions.match(/\b(\d{1,3})\b/);
+                    return m ? Math.min(50, Math.max(0, parseInt(m[1], 10))) : null;
+                }
                 if (name === 'ايام') return 0;
                 return null;
             }
