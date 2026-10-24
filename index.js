@@ -359,6 +359,7 @@ async function onClientReady() {
     // 🔒 وضع السيرفر الواحد (PUBLIC_BOT غير مفعّل): نطلع من أي سيرفر غير سيرفرنا
     //    شرط استضافات البوتات المجانية — البوت خاص بسيرفر واحد وما يخدم سيرفرات ثانية
     if (!access.publicBot()) {
+        console.log('🔒 وضع السيرفر الواحد: البوت لسيرفر نوفا فقط (يطلع من أي سيرفر ثاني)');
         for (const g of [...client.guilds.cache.values()]) {
             if (access.isNova(g.id, CONFIG)) continue;
             console.log(`🚪 طلعت من سيرفر غير مصرّح: ${g.name} (${g.id}) — البوت لسيرفر واحد فقط`);
@@ -438,6 +439,19 @@ client.on('guildCreate', async (guild) => {
         ).catch(() => {});
     } catch { }
 });
+
+// 🔒 حراسة دورية (وضع السيرفر الواحد): كل ١٠ دقايق نتأكد إن البوت ما صار بسيرفر ثاني
+const singleSweep = setInterval(() => {
+    try {
+        if (access.publicBot() || !client.isReady()) return;
+        for (const g of [...client.guilds.cache.values()]) {
+            if (access.isNova(g.id, CONFIG)) continue;
+            console.log(`🚪 (حراسة دورية) طلعت من سيرفر غير مصرّح: ${g.name} (${g.id})`);
+            try { g.leave().catch(() => {}); } catch { }
+        }
+    } catch (e) { console.error('❌ حراسة السيرفرات:', e.message); }
+}, 10 * 60_000);
+if (singleSweep.unref) singleSweep.unref();
 
 // إجبار الحالة على "أونلاين" — أساس بقاء البوت ظاهر 24/7
 function setOnline() {

@@ -51,7 +51,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-24.2';
+const BUILD = '2026-10-24.3';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -317,7 +317,7 @@ function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEvent
 var pages={},cur='overview',PAGE_T=null;
 var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
-function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
+function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper)&&d.public!==false;return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -1645,7 +1645,8 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             guild: g ? { id: g.id, name: g.name, icon: g.iconURL({ size: 64 }) || '' } : null,
             nova: !!(g && String(g.id) === String(CONFIG.GUILD_ID)),
             canManageAccess: !!(g && access.canManage(g, s.id, CONFIG)),
-            isSuper: access.isSuper(s.id, CONFIG)
+            isSuper: access.isSuper(s.id, CONFIG),
+            public: access.publicBot()
         });
     });
     // فحص سريع من المتصفح (بدون تسجيل دخول): يثبت أن السيرفر يرجع JSON فعلاً
@@ -1680,6 +1681,10 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         try {
             const gid = guildId(req);
             if (!gid) return res.status(409).json({ error: 'اختر سيرفر أول (ما فيه سيرفر محدد بجلستك)' });
+            // 🔒 وضع السيرفر الواحد: أي سيرفر غير نوفا مرفوض (كل المسارات)
+            if (!access.publicBot() && String(gid) !== String(CONFIG.GUILD_ID)) {
+                return res.status(403).json({ error: 'البوت بوضع السيرفر الواحد (نوفا فقط) 🔒 — هذي اللوحة لسيرفر نوفا بس' });
+            }
             const g = client.guilds.cache.get(gid);
             if (!g) return res.status(503).json({ error: 'البوت مو متصل بهذا السيرفر' });
             res.json((await fn(g, req.body || {}, req)) || { ok: true });
@@ -2566,6 +2571,8 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     const rootOnly = (fn) => async (req, res) => {
         const s = session(req);
         if (!s || !access.isSuper(s.id, CONFIG)) return res.status(403).json({ error: 'هذي الصفحة خاصة بصاحب البوت فقط 👑' });
+        // 🔒 وضع السيرفر الواحد: صفحة تعدد السيرفرات مقفولة
+        if (!access.publicBot()) return res.status(403).json({ error: 'البوت بوضع السيرفر الواحد (نوفا فقط) 🔒 — تعدد السيرفرات مقفول' });
         try { return await fn(s, req, res); }
         catch (e) { res.status(400).json({ error: String(e.message || 'خطأ').slice(0, 150) }); }
     };
