@@ -51,7 +51,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-21.2';
+const BUILD = '2026-10-24.1';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">

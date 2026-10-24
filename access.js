@@ -47,12 +47,19 @@ function save(a) { store.write(FILE, a); return a; }
 
 // ===== 🔒 تفعيل/قفل السيرفرات =====
 
+// ===== 🌐 وضع البوت: سيرفر واحد (الافتراضي) أو لكل السيرفرات =====
+// PUBLIC_BOT=0 (الافتراضي) → البوت **لسيرفر نوفا فقط**: يطلع من أي سيرفر ثاني فوراً
+//   (هذا شرط معظم استضافات البوتات المجانية: ممنوع «بوت عام» يخدم سيرفرات كثيرة)
+// PUBLIC_BOT=1 → البوت لكل السيرفرات (نظام التفعيل من صفحة «السيرفرات 🌐»)
+const publicBot = () => String(process.env.PUBLIC_BOT || '0').trim() === '1';
+
 // هل السيرفر مفعّل؟ (سيرفرنا مفعّل دايماً)
 function isApproved(gid, CONFIG) {
     const c = cfg(CONFIG);
     const g = asId(gid);
     if (!g) return false;
     if (isNova(g, c)) return true;
+    if (!publicBot()) return false;         // 🔒 وضع السيرفر الواحد
     return !!all().approved[g];
 }
 
@@ -245,7 +252,7 @@ const denyTextLocked = '🔒 هذا البوت مقفل في هذا السيرف
 module.exports = {
     FILE,
     // 🔒 القفل
-    boot, isApproved, approve, approvedList, canRun, denyTextLocked,
+    boot, isApproved, approve, approvedList, canRun, denyTextLocked, publicBot,
     // 🔑 الصلاحية
     list, add, remove, clear, has, canUse, canManage, guildsOf,
     // 👑 الرتب

@@ -340,6 +340,15 @@ client.syncGuildCommands = async (g) => {
 let systemsReady = false;   // الأنظمة تُهيأ مرة واحدة فقط (عشان ما تتكرر عند إعادة الاتصال)
 async function onClientReady() {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
+    // 🔒 وضع السيرفر الواحد (PUBLIC_BOT غير مفعّل): نطلع من أي سيرفر غير سيرفرنا
+    //    شرط استضافات البوتات المجانية — البوت خاص بسيرفر واحد وما يخدم سيرفرات ثانية
+    if (!access.publicBot()) {
+        for (const g of [...client.guilds.cache.values()]) {
+            if (access.isNova(g.id, CONFIG)) continue;
+            console.log(`🚪 طلعت من سيرفر غير مصرّح: ${g.name} (${g.id}) — البوت لسيرفر واحد فقط`);
+            try { await g.leave(); } catch (e) { console.error('❌ ما قدرت أطلع من', g.id, e.message); }
+        }
+    }
     // 🌐 الأوامر لكل سيرفر البوت فيه — **بس السيرفرات المفعّلة**.
     // 🔒 أي سيرفر جديد يظل مقفول (بدون أوامر ولا ردود) لحد ما نفعّله من اللوحة.
     let regd = 0, locked = 0;
@@ -380,6 +389,19 @@ client.on('clientReady', onClientReady);
 // 🌐 سيرفر جديد أضاف البوت: 🔒 يظل **مقفول** — ما يرد ولا تنزل أوامره
 //    إلا لما **ارثر/إيدا يفعّلونه** من اللوحة («السيرفرات 🌐» ← تفعيل)
 client.on('guildCreate', async (guild) => {
+    // 🔒 وضع السيرفر الواحد: البوت ما ينضاف لسيرفرات ثانية — نطلع فوراً ونعتذر لصاحب السيرفر
+    if (!access.publicBot() && !access.isNova(guild.id, CONFIG)) {
+        console.log(`🚪 سيرفر جديد (${guild.name}) — البوت خاص بسيرفر واحد، أطلع فوراً`);
+        try {
+            const o = await guild.fetchOwner().catch(() => null);
+            if (o) await o.send(
+                `اعتذر 🙏 — **${guild.name}** أضاف البوت، لكن هذا البوت **خاص بسيرفر واحد** (بوت نوفا) `
+                + `وما يقدر يشتغل بسيرفرات ثانية، فطلعت من السيرفر.`
+            ).catch(() => {});
+        } catch { }
+        try { await guild.leave(); } catch (e) { console.error('❌ ما قدرت أطلع:', e.message); }
+        return;
+    }
     console.log(`➕ دخلت سيرفر جديد: ${guild.name} (${guild.id}) — 🔒 مقفول لحد ما يفعّله ارثر/إيدا`);
     // نمسح أي أوامر قديمة (احتياط) — ما فيه شي يشتغل بهالسيرفر
     try { await client.syncGuildCommands(client.guilds.cache.get(guild.id) || guild); } catch {}
