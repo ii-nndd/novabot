@@ -178,8 +178,14 @@ const voiceTargetId = () => botcontrol.voiceChannelId(CONFIG.GUILD_ID, CONFIG.VO
 
 const isInVoice = () => !!connection && connection.state.status === VoiceConnectionStatus.Ready;
 
+// تهدئة تدريجية عند فشل الفويس — عشان ما نغرق ديسكورد بمحاولات متكررة
+// (مهم: أي فشل متكرر = ترافيك زيادة، ووقت حدود ديسكورد على الـIP المشترك يطوّل الحجب)
+let voiceFails = 0;              // كم مرة فشل الاتصال ورا بعض
+let voiceBlockedUntil = 0;       // ما نحاول قبل هذا الوقت
+
 async function connectToVoice(force = false) {
     if (connecting) return;
+    if (Date.now() < voiceBlockedUntil) return;   // في تهدئة جارية — ما نحاول
     const targetId = voiceTargetId();
     if (!targetId) return;
     // لو متصل أصلاً بنفس الروم المطلوب، ما نسوي شي (إلا لو force)
@@ -221,6 +227,7 @@ async function connectToVoice(force = false) {
         });
 
         await entersState(conn, VoiceConnectionStatus.Ready, 20_000);
+        voiceFails = 0; voiceBlockedUntil = 0;
         console.log(`🎙️ دخل الفويس بنجاح (${channel.name})`);
     } catch (err) {
         console.error('❌ فشل الدخول للفويس:', err.message);
@@ -228,8 +235,15 @@ async function connectToVoice(force = false) {
         try { if (conn) conn.destroy(); } catch {}
         if (connection === conn) connection = null;
         currentVoiceId = '';
-        // نعيد المحاولة إلا لو المفتاح مطفي من الداشبورد
-        if (botcontrol.voiceEnabled(CONFIG.GUILD_ID)) setTimeout(() => connectToVoice(true), 15_000);
+        // تهدئة تدريجية: ١٥ث → ٣٠ → ٦٠ → ١٢٠ → ٢٤٠ → ٤٨٠ → ١٠ دقايق (حد أقصى)
+        voiceFails = Math.min(voiceFails + 1, 7);
+        const wait = Math.min(15_000 * Math.pow(2, voiceFails - 1), 10 * 60_000);
+        voiceBlockedUntil = Date.now() + wait;
+        console.log(`⏳ تهدئة الفويس ${Math.round(wait / 1000)} ثانية (فشل ${voiceFails} مرة ورا بعض)`);
+        if (botcontrol.voiceEnabled(CONFIG.GUILD_ID)) {
+            const t = setTimeout(() => connectToVoice(true), wait);
+            if (t.unref) t.unref();
+        }
     } finally {
         connecting = false;
     }
@@ -246,6 +260,8 @@ function disconnectFromVoice() {
 // 🎙️ «تعال» = البوت يجي عند اللي ناداه (لو هو داخل روم صوتي) — ويحفظ نفس الروم
 // عشان يبقى فيه 24/7 (الحارس يرجع البوت لهالروم). لو اللي نادى مو بفويس → الروم المحفوظ.
 async function comeToMe(member) {
+    // أمر صريح من العضو → نلغي أي تهدئة جارية
+    voiceFails = 0; voiceBlockedUntil = 0;
     const ch = member && member.voice && member.voice.channel;
     const target = ch && typeof ch.isVoiceBased === 'function' && ch.isVoiceBased() ? ch : null;
     try {
