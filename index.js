@@ -27,6 +27,8 @@ const presence = require('./presence');
 const hub = require('./hub');
 const colors = require('./colors');
 const reactions = require('./reactions');
+const ai = require('./ai');
+const extra = require('./extra');
 const replies2 = require('./replies2');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
@@ -333,7 +335,7 @@ const commands = [
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('ألوان').setDescription('يعيد توليد صورة الألوان ويحدّث بانل الألوان (للملكيين فقط)'),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands, hub.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands, hub.commands, ai.commands, extra.commands);
 
 // 🔁 مزامنة أوامر سيرفر واحد:
 //    مفعّل → تنزل كل الأوامر · مقفول 🔒 → تنمسح أوامره (ما يقدر أحد يجرّب البوت)
@@ -390,6 +392,7 @@ async function onClientReady() {
         jail.init(client);
         trap.init(client, CONFIG);
         reactions.init(client);          // 😍 تفاعل تلقائي مع الصور (بدون صلاحيات إضافية)
+        ai.init(client, CONFIG);         // 🤖 الذكاء الاصطناعي (منشن/رد/أمر اسأل)
         guard.init(client, CONFIG);
         presence.init(client, CONFIG);
         colors.init(client, CONFIG);
@@ -481,6 +484,7 @@ client.on('interactionCreate', async (interaction) => {
         if (await tickets.handleButton(interaction, { getTier, CONFIG, pick, access })) return;
         if (await giveaway.handleButton(interaction)) return;
         if (await selfroles.handleButton(interaction)) return;
+        if (await extra.handleButton(interaction)) return;      // ⭕ إكس أو · 💰 من سيربح · 📊 استفتاء
         return;
     }
     // قائمة اختيار لون السيرفر (StringSelectMenu) — مستقلة عن باقي الأنظمة
@@ -506,6 +510,8 @@ client.on('interactionCreate', async (interaction) => {
     if (await admin.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await economy.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await hub.handle(interaction, { getTier, CONFIG, pick, access })) return;   // 🎛️ /لوحة_تحكم
+    if (await ai.handle(interaction)) return;                                        // 🤖 /اسأل
+    if (await extra.handle(interaction, { getTier, CONFIG, pick, access })) return;  // 🎮 أوامر إضافية
     if (await giveaway.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await selfroles.handle(interaction, { getTier, CONFIG, pick, access })) return;
 
@@ -705,7 +711,7 @@ const asInteraction = (message, name) => {
     return it;
 };
 
-const TEXT_GAMES = { 'سرعه': 'سرعة', 'رياضيات': 'رياضيات', 'مبعثره': 'مبعثرة', 'اعلام': 'اعلام' };
+const TEXT_GAMES = { 'سرعه': 'سرعة', 'رياضيات': 'رياضيات', 'مبعثره': 'مبعثرة', 'اعلام': 'اعلام', 'كلمه': 'كلمة_السر', 'السر': 'كلمة_السر' };
 
 // البوت ينادى فقط بـ: يا عبد / عبد / منشن / الرد على رسالته
 async function isCalled(message, tokens, content) {
@@ -787,6 +793,12 @@ client.on('messageCreate', async (message) => {
 
     const content = message.content.trim();
     if (!content) return;
+
+    // 🤖 الذكاء الاصطناعي: منشن البوت أو رد على رسالته → يجاوب الذكاء بدل الرد العام
+    if (ai.shouldAnswer(message, client)) {
+        if (onCooldown(message.author.id, ai.get(message.guild.id).cooldownSec || 1)) return;
+        return void ai.answer(message, { content }).catch(() => {});
+    }
 
     // أمر بادئة تعجب: !rank / !رتبة / !متصدرين / !نقاطي (بدون الحاجة لمناداة البوت)
     const bang = content.match(/^!\s*(rank|رتبة|رتبه|مستوى|متصدرين|المتصدرين|top|نقاطي)\s*$/i);
@@ -918,6 +930,13 @@ client.on('messageCreate', async (message) => {
     if (has(WHERE_WORDS)) return say(rpFor('where', message.author.id, tier));
     if (has(MOVE_WORDS)) return say(rpFor('move', message.author.id, tier));
     if (has(POEM_WORDS)) return say(rp('poems'));
+
+    // 🤖 (اختياري من اللوحة) أي كلام موجّه للبوت ما عرفه النظام القديم → الذكاء الاصطناعي
+    const aiCfg = ai.get(message.guild.id);
+    if (aiCfg.fallback && ai.ready(message.guild.id) && content.length >= 6
+        && !onCooldown(message.author.id, aiCfg.cooldownSec || 1)) {
+        return void ai.answer(message, { content }).catch(() => {});
+    }
 
     return say(rpFor('greet', message.author.id, tier));
 });

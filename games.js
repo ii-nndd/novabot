@@ -64,12 +64,22 @@ const games = {
             cardMain: emoji, flagEmoji: emoji, cardSmall: 'اكتب اسم الدولة', kind: 'flag', iconName: 'flag', game: 'خمّن العلم',
             check: (t) => names.some(n => loose(n) === loose(t)), pts: () => 10
         };
+    },
+    كلمة_السر() {
+        const w = pick(words());
+        const masked = [...w].map(ch => (ch === ' ' ? ' ' : '•')).join(' ');
+        return {
+            title: '🔐 كلمة السر', body: `خمّن الكلمة — عدد حروفها **${w.length}**\n\n## ${masked}`, seconds: 25, answer: w,
+            cardMain: masked, cardSmall: `خمّن الكلمة — ${w.length} حروف`, kind: 'text', iconName: 'type', game: 'كلمة السر',
+            check: (t) => norm(t) === norm(w), pts: () => 10
+        };
     }
 };
 
 const commands = [
     ['سرعة', 'لعبة سرعة الكتابة'], ['رياضيات', 'لعبة الرياضيات السريعة'],
-    ['مبعثرة', 'رتّب الحروف المبعثرة'], ['اعلام', 'خمّن العلم']
+    ['مبعثرة', 'رتّب الحروف المبعثرة'], ['اعلام', 'خمّن العلم'],
+    ['كلمة_السر', 'خمّن الكلمة من عدد حروفها']
 ].map(([n, d]) => new SlashCommandBuilder().setName(n).setDescription(d).setDMPermission(false).toJSON());
 
 async function play(i, ctx, g) {

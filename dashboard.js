@@ -23,6 +23,7 @@ const giveaway = require('./giveaway');
 const admin = require('./admin');
 const access = require('./access');
 const reactions = require('./reactions');
+const ai = require('./ai');
 const replies2 = require('./replies2');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
@@ -51,7 +52,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-24.3';
+const BUILD = '2026-10-25.1';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -315,7 +316,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
 function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper)&&d.public!==false;return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
@@ -821,6 +822,108 @@ pages.react=function(m){return api('react').then(function(d){
  m.appendChild(el('div',{class:'row',style:'margin-top:14px;gap:8px;flex-wrap:wrap'},[saveBtn,resetBtn]));
  return;
 })}
+// ===== 🤖 الذكاء الاصطناعي =====
+pages.ai=function(m){
+ m.appendChild(el('h1',{text:'الذكاء الاصطناعي 🤖'}));
+ m.appendChild(el('div',{class:'mut',style:'line-height:1.9',text:'البوت يجاوب على أي سؤال بأسلوب نوفا — بالأمر /اسأل، أو بمنشنه، أو بالرد على رسالته. المفتاح المجاني من Google AI Studio (بلا بطاقة).'}));
+ return api('ai').then(function(d){
+  var dd=d||{},c=dd.cfg||{},chans=dd.channels||[];
+  var st={enabled:!!c.enabled,allowMention:c.allowMention!==false,allowReply:c.allowReply!==false,fallback:!!c.fallback};
+  m.appendChild(card('الحالة',el('div',{},[
+   el('div',{class:'row'},[
+    el('span',{class:'tag '+(dd.ready?'on':'off'),text:dd.ready?'✅ شغال':'⛔ مو شغال'}),
+    el('span',{class:'tag',text:dd.keySet?('🔑 محفوظ '+dd.keyHint):'🔑 ما فيه مفتاح'}),
+    el('span',{class:'tag',text:'🤖 '+(dd.providerLabel||'')}),
+    el('span',{class:'tag',text:'📊 '+((dd.usage&&dd.usage.n)||0)+' / '+(c.dailyGlobal||0)+' اليوم'})
+   ]),
+   el('div',{class:'mut',style:'margin-top:8px',text:dd.ready?'جاهز يجاوب: /اسأل · منشن البوت · رد على رسالته.':'للتشغيل: حط المفتاح ← شغّل «تفعيل الذكاء الاصطناعي» ← حفظ.'}),
+   dd.keyFromEnv?el('div',{class:'mut',style:'margin-top:4px;font-size:12px',text:'المفتاح جاي من .env باسم AI_KEY — مو محتاج تحطه هني.'}):el('span',{text:''})
+  ])));
+  var prov=el('select',{},(dd.providers||[]).map(function(p){return opt(p.id,p.label)}));
+  prov.value=c.provider||'gemini';
+  var model=el('input',{style:'width:100%',value:c.model||''});
+  var mrow=el('div',{class:'row',style:'gap:6px;flex-wrap:wrap;margin-top:8px'});
+  function fillModels(){
+   mrow.innerHTML='';
+   var p=(dd.providers||[]).filter(function(x){return x.id===prov.value})[0]||{};
+   (p.models||[]).forEach(function(x){
+    mrow.appendChild(el('button',{class:'b2',text:x,style:'font-size:12px;padding:4px 8px',on:{click:function(){model.value=x}}}));
+   });
+  }
+  fillModels();
+  prov.addEventListener('change',function(){var p=(dd.providers||[]).filter(function(x){return x.id===prov.value})[0]||{};model.value=p.def||'';fillModels()});
+  var key=el('input',{type:'password',style:'width:100%',placeholder:dd.keySet?('محفوظ: '+dd.keyHint+' — اكتب مفتاح جديد لتغييره'):'الصق المفتاح هنا'});
+  m.appendChild(card('المزوّد والمفتاح 🔑',el('div',{},[
+   el('label',{class:'row',style:'margin:8px 0'},[el('span',{text:'المزوّد'}),prov]),
+   el('p'),
+   el('div',{class:'mut',style:'margin-bottom:4px',text:'اسم الموديل'}),
+   model,mrow,
+   el('p'),
+   el('div',{class:'mut',style:'margin-bottom:4px',text:'المفتاح (لا تشاركه مع أحد)'}),
+   key,
+   el('div',{class:'mut',style:'margin-top:8px;font-size:12px',text:'مفتاح مجاني: افتح aistudio.google.com ← Get API key ← Create key ← انسخه والصقه هنا (أو حطه في .env باسم AI_KEY).'})
+  ])));
+  var persona=el('textarea',{rows:'6',style:'width:100%'});
+  persona.value=c.persona||'';
+  m.appendChild(card('الشخصية 🎭',el('div',{},[
+   el('div',{class:'mut',style:'margin-bottom:6px',text:'هذي تعليمات البوت: كيف يتكلم ومتى يختصر. عدّلها على ذوقك.'}),
+   persona
+  ])));
+  function num(label,val,step,min,max){
+   var i=el('input',{type:'number',value:String(val),step:String(step||1),min:String(min||0),max:String(max||1000)});
+   return {r:el('label',{class:'row',style:'margin:8px 0;gap:10px'},[el('span',{style:'flex:1',text:label}),i]),i:i};
+  }
+  var perU=num('حد العضو باليوم (سؤال)',c.maxPerUser,1,1,500);
+  var cd=num('الكولداون (ثانية)',c.cooldownSec,1,0,120);
+  var daily=num('حد السيرفر باليوم (سؤال)',c.dailyGlobal,10,10,5000);
+  var memM=num('مدة الذاكرة (دقيقة · 0 = بدون)',c.memoryMinutes,1,0,120);
+  var toks=num('طول الرد (توكن)',c.maxTokens,50,100,2000);
+  var temp=num('الإبداعية (0 دقيق · 1 متنوع)',c.temperature,0.1,0,1.5);
+  m.appendChild(card('الحدود ⏱️',el('div',{},[perU.r,cd.r,daily.r,memM.r,toks.r,temp.r])));
+  var sel=el('select',{multiple:'multiple',size:'8',style:'width:100%'},chans.map(function(x){return opt(x.id,'# '+x.name)}));
+  [].forEach.call(sel.options,function(o){if((c.channels||[]).indexOf(o.value)>=0)o.selected=true});
+  function pickCh(){var a=[];[].forEach.call(sel.options,function(o){if(o.selected)a.push(o.value)});return a}
+  m.appendChild(card('📷 الرومات المسموحة',el('div',{},[
+   el('div',{class:'mut',style:'margin-bottom:6px',text:'ما تختار شي = يشتغل بكل الرومات.'}),
+   sel,
+   el('div',{class:'mut',style:'margin-top:6px;font-size:12px',text:'المختار حالياً: '+pickCh().length+' روم'})
+  ])));
+  m.appendChild(card('أساليب الرد 💬',el('div',{},[
+   el('div',{class:'row'},[sw(st.enabled,function(v){st.enabled=v}),el('span',{text:'تفعيل الذكاء الاصطناعي'})]),
+   el('div',{class:'row',style:'margin-top:6px'},[sw(st.allowMention,function(v){st.allowMention=v}),el('span',{text:'يرد على منشن البوت (@)'})]),
+   el('div',{class:'row',style:'margin-top:6px'},[sw(st.allowReply,function(v){st.allowReply=v}),el('span',{text:'يرد على الرد على رسالته (Reply)'})]),
+   el('div',{class:'row',style:'margin-top:6px'},[sw(st.fallback,function(v){st.fallback=v}),el('span',{text:'أي كلام موجّه للبوت ما يعرفه النظام → يجاوبه الذكاء'})])
+  ])));
+  function body(){
+   var b={enabled:st.enabled,provider:prov.value,model:model.value.trim(),persona:persona.value,
+    maxPerUser:Number(perU.i.value),cooldownSec:Number(cd.i.value),dailyGlobal:Number(daily.i.value),
+    memoryMinutes:Number(memM.i.value),maxTokens:Number(toks.i.value),temperature:Number(temp.i.value),
+    allowMention:st.allowMention,allowReply:st.allowReply,fallback:st.fallback,channels:pickCh()};
+   var k=String(key.value||'').trim();
+   if(k)b.key=k;
+   return b;
+  }
+  var msg=el('div',{class:'mut',style:'margin-top:10px;line-height:1.9'});
+  var saveBtn=el('button',{class:'btn',text:'💾 حفظ'});
+  saveBtn.addEventListener('click',function(){
+   saveBtn.disabled=true;
+   api('ai/save',body()).then(function(){toast('انحفظ ✅');show('ai')}).catch(function(e){saveBtn.disabled=false;toast(e.message,1)});
+  });
+  var testBtn=el('button',{class:'b2',text:'🧪 تجربة الآن'});
+  testBtn.addEventListener('click',function(){
+   testBtn.disabled=true;msg.textContent='⏳ أجرّب...';
+   api('ai/save',body()).then(function(){return api('ai/test',{})}).then(function(r){
+    testBtn.disabled=false;
+    msg.textContent=(r&&r.ok?'✅ ':'⚠️ ')+((r&&r.text)||'');
+    toast(r&&r.ok?'المفتاح شغال ✅':'في مشكلة — شوف الرسالة',r&&r.ok?0:1);
+   }).catch(function(e){testBtn.disabled=false;msg.textContent='⚠️ '+e.message;toast(e.message,1)});
+  });
+  var resetBtn=el('button',{class:'b2',text:'🔄 رجوع الافتراضي'});
+  resetBtn.addEventListener('click',function(){resetBtn.disabled=true;api('ai/reset',{}).then(function(){toast('رجع للافتراضي');show('ai')}).catch(function(e){resetBtn.disabled=false;toast(e.message,1)})});
+  m.appendChild(el('div',{class:'row',style:'margin-top:14px;gap:8px;flex-wrap:wrap'},[saveBtn,testBtn,resetBtn]));
+  m.appendChild(msg);
+  return;
+ })};
 pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
 var q=el('input',{placeholder:'ابحث بالاسم',style:'flex:1;min-width:160px'}),box=el('div',{class:'card'});
 function act(path,body,msg){go(api(path,body),msg,null);setTimeout(load,900)}
@@ -1763,6 +1866,27 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         note(req, 'رجوع إعدادات الرياكشن للافتراضي');
         return { ok: true, cfg: reactions.get(g.id) };
     }));
+
+    // ===== 🤖 الذكاء الاصطناعي =====
+    api.get('/ai', h(async (g) => {
+        await g.channels.fetch().catch(() => {});
+        const channels = [...g.channels.cache.values()]
+            .filter(c => !c.isThread() && c.isTextBased && c.isTextBased())
+            .sort((a, b) => (a.rawPosition || 0) - (b.rawPosition || 0))
+            .map(c => ({ id: c.id, name: c.name }));
+        return { ...ai.state(g.id), channels };
+    }));
+    api.post('/ai/save', h(async (g, b, req) => {
+        const cfg = ai.set(g.id, b);
+        note(req, `حفظ إعدادات الذكاء الاصطناعي (${cfg.enabled ? 'مفعّل' : 'مطفي'} · ${cfg.provider})`);
+        return { ok: true, cfg: ai.state(g.id).cfg };
+    }));
+    api.post('/ai/reset', h(async (g, b, req) => {
+        ai.reset(g.id);
+        note(req, 'رجوع إعدادات الذكاء الاصطناعي للافتراضي');
+        return { ok: true, cfg: ai.state(g.id).cfg };
+    }));
+    api.post('/ai/test', h(async (g) => ai.test(g.id)));
 
     api.get('/replies', hr(async () => ({ all: replies.all(), custom: replies.overrides() })));
     api.post('/replies/save', hr(async (g, b, req) => {
