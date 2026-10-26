@@ -35,7 +35,7 @@ const MAX_CHANNELS = 30;        // أقصى عدد رومات مسموحة
 
 // المزوّدون + الموديلات المقترحة
 const PROVIDERS = {
-    gemini: { label: 'Google Gemini (مجاني)', def: 'gemini-2.0-flash', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'] },
+    gemini: { label: 'Google Gemini (مجاني)', def: 'gemini-3.5-flash', models: ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash'] },
     groq: { label: 'Groq (مجاني وسريع)', def: 'llama-3.3-70b-versatile', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
     openai: { label: 'OpenAI (مدفوع)', def: 'gpt-4o-mini', models: ['gpt-4o-mini', 'gpt-4o'] }
 };
@@ -52,7 +52,7 @@ const DEF_PERSONA = [
 const DEF = {
     enabled: false,
     provider: 'gemini',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.5-flash',
     key: '',
     persona: DEF_PERSONA,
     maxPerUser: 30,          // سؤال/عضو باليوم
@@ -74,6 +74,16 @@ const all = () => {
 };
 const save = (a) => store.write(FILE, a);
 const uniq = (a) => a.filter((x, i) => a.indexOf(x) === i);
+
+// ⚠️ موديلات Gemini الي انسحبت (ترجع 404 للمفاتيح الجديدة) → نبدّلها بأحدث موديل تلقائياً
+const DEAD_GEMINI = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash-lite',
+    'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const fixModel = (prov, m) => {
+    let x = String(m == null ? '' : m).trim().slice(0, 60);
+    if (!x) x = PROVIDERS[prov] ? PROVIDERS[prov].def : DEF.model;
+    if (prov === 'gemini' && DEAD_GEMINI.includes(x)) x = PROVIDERS.gemini.def;
+    return x;
+};
 const clamp = (n, a, b, d) => {
     const x = Number(n);
     return Number.isFinite(x) ? Math.min(b, Math.max(a, Math.round(x * 100) / 100)) : d;
@@ -88,7 +98,7 @@ function get(gid) {
     return {
         enabled: !!c.enabled,
         provider: prov,
-        model: String(c.model || PROVIDERS[prov].def).trim().slice(0, 60),
+        model: fixModel(prov, c.model),
         key: String(c.key || '').trim().slice(0, 200),
         persona: String(c.persona || DEF.persona).trim().slice(0, 1500),
         maxPerUser: clamp(c.maxPerUser, 1, 500, DEF.maxPerUser),
@@ -115,7 +125,7 @@ function set(gid, body) {
     const out = {
         enabled: b.enabled == null ? old.enabled : !!b.enabled,
         provider: prov,
-        model: String(b.model == null ? old.model : b.model || '').trim().slice(0, 60) || PROVIDERS[prov].def,
+        model: fixModel(prov, b.model == null ? old.model : b.model),
         key: String(b.key == null ? old.key : b.key || '').trim().slice(0, 200),
         persona: String(b.persona == null ? old.persona : b.persona || '').trim().slice(0, 1500) || DEF.persona,
         maxPerUser: clamp(b.maxPerUser == null ? old.maxPerUser : b.maxPerUser, 1, 500, DEF.maxPerUser),
@@ -234,7 +244,11 @@ async function post(url, body, key) {
         const raw = await r.text();
         let data = null;
         try { data = raw ? JSON.parse(raw) : null; } catch { }
-        if (!r.ok) throw new Error(errHttp(r.status, data, raw));
+        if (!r.ok) {
+            const err = new Error(errHttp(r.status, data, raw));
+            err.status = r.status;
+            throw err;
+        }
         return data;
     } catch (e) {
         const m = String((e && e.message) || '');
@@ -264,28 +278,48 @@ function errHttp(status, data, raw) {
 }
 
 // ===== نداء المزوّد =====
+// موديلات Gemini 3 (والـlatest) تفكّر قبل الرد → نفكّرها off عشان ترد بسرعة وبدون MAX_TOKENS فاضي
+const NO_THINK = /^(gemini-3|gemini-flash)/;
+function geminiBody(cfg, model, contents) {
+    const generationConfig = {
+        temperature: cfg.temperature,
+        maxOutputTokens: Math.max(200, Number(cfg.maxTokens) || 600)
+    };
+    if (NO_THINK.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    return { systemInstruction: { parts: [{ text: cfg.persona }] }, contents, generationConfig };
+}
+
 async function askGemini(cfg, key, q, hist) {
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-        + encodeURIComponent(cfg.model) + ':generateContent?key=' + encodeURIComponent(key);
     const contents = hist.filter(h => h && h.text).map(h => ({
         role: h.role === 'model' ? 'model' : 'user',
         parts: [{ text: h.text }]
     }));
     contents.push({ role: 'user', parts: [{ text: q }] });
-    const data = await post(url, {
-        systemInstruction: { parts: [{ text: cfg.persona }] },
-        contents,
-        generationConfig: { temperature: cfg.temperature, maxOutputTokens: cfg.maxTokens }
-    });
-    const cand = (data && data.candidates && data.candidates[0]) || null;
-    const parts = cand && cand.content && cand.content.parts;
-    let out = Array.isArray(parts) ? parts.map(p => (p && p.text) || '').join('') : '';
-    out = String(out || '').trim();
-    if (!out) {
-        const why = cand && cand.finishReason ? ` (${cand.finishReason})` : '';
-        throw new Error('🤖 ما رجع رد من Gemini' + why + ' — جرّب صيغة سؤال ثانية.');
+
+    // نجرّب الموديل المختار، ولو انسحب/مشغول ننزل للموديلات التالية تلقائياً
+    const chain = uniq([cfg.model].concat(PROVIDERS.gemini.models)).filter(Boolean);
+    let last = null;
+    for (const model of chain) {
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+            + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
+        try {
+            const data = await post(url, geminiBody(cfg, model, contents));
+            const cand = (data && data.candidates && data.candidates[0]) || null;
+            const parts = cand && cand.content && cand.content.parts;
+            const out = (Array.isArray(parts) ? parts.map(p => (p && p.text) || '').join('') : '').trim();
+            if (out) return out;
+            const why = cand && cand.finishReason ? ` (${cand.finishReason})` : '';
+            last = new Error('🤖 ما رجع رد من Gemini' + why + ' — جرّب صيغة سؤال ثانية.');
+            continue;   // موديل ثاني يمكن ينجح
+        } catch (e) {
+            last = e;
+            const s = e && e.status;
+            const keyBad = /🔑/.test(String((e && e.message) || ''));
+            if (!keyBad && (s === 400 || s === 404 || s === 429 || s === 503)) continue;
+            throw e;
+        }
     }
-    return out;
+    throw last || new Error('🤖 ما رجع رد من Gemini — جرّب بعد شوي.');
 }
 
 async function askChat(cfg, key, q, hist) {
