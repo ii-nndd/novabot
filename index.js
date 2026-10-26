@@ -472,6 +472,7 @@ const rpsNames = { rock: '🪨 حجر', paper: '📄 ورقة', scissors: '✂�
 const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
+  try {
     // 🔒 سيرفر مقفول = ما فيه أي تفاعل (ولا حتى أزرار القرعات والتذاكر).
     //    الأوامر أصلاً ما تنزل له، وهذا احتياط لو بقت نسخة قديمة مسجّلة عند ديسكورد.
     if (interaction.guild && !access.canRun(interaction.guild.id, interaction.user && interaction.user.id, CONFIG)) {
@@ -501,8 +502,13 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     // 🛡️ أمر الحماية يشتغل من أي روم (لو صار نك لازم نقدر نقفل السيرفر بأسرع وقت)
     if (await guard.handle(interaction, { getTier, CONFIG, pick, access })) return;
-    // الرومات المسموح فيها: لو الروم معطّل أو خارج القائمة المسموحة، البوت يتجاهل الأمر تماماً
-    if (interaction.guild && interaction.channel && !botcontrol.canInteract(interaction.guild.id, interaction.channel.id)) return;
+    // الرومات المسموح فيها: لو الروم معطّل، نرد برسالة واضحة بدل السكوت (السكوت يطلع «التطبيق لم يستجب»)
+    if (interaction.guild && interaction.channel && !botcontrol.canInteract(interaction.guild.id, interaction.channel.id)) {
+        return interaction.reply({
+            content: '🔒 البوت **معطّل في هذا الروم** — عشان كذا ما رد عليك.\nاكتب هنا: **يا عبد شغل البوت** ويرجع فوراً، أو فعّله من اللوحة ← «التحكم بالبوت».',
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
     if (await tickets.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await games.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick, access })) return;
@@ -664,12 +670,31 @@ client.on('interactionCreate', async (interaction) => {
                 return say({ embeds: [helpEmbed] });
             }
         }
+        // 🛟 احتياط: لو ما فيه أي معالج تعرّف على الأمر → نرد بدل ما نسكت (السكوت = «التطبيق لم يستجب»)
+        if (!interaction.replied && !interaction.deferred) {
+            return interaction.reply({
+                content: '🤔 هذا الأمر ما له معالج في هذي النسخة — أبلغ الإدارة (‎/مساعدة تعرض الأوامر الشغّالة).',
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
     } catch (err) {
         console.error('❌ خطأ في الأمر:', name, err);
         if (!interaction.replied && !interaction.deferred) {
             interaction.reply({ content: '⚠️ صار خطأ، حاول مرة ثانية.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
     }
+  } catch (err) {
+    // 🛟 الحماية الأخيرة: أي خطأ قبل الوصول لمعالج الأمر → نرد بسببه بدل ما ديسكورد يقول «التطبيق لم يستجب»
+    console.error('❌ خطأ بالتفاعل:', err);
+    try {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+                content: '⚠️ خطأ: ' + String((err && err.message) || err).slice(0, 180),
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+    } catch { }
+  }
 });
 
 // ====================================================================
