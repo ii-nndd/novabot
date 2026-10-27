@@ -125,6 +125,9 @@ function clear(gid) {
 const superIds = (CONFIG) => [asId(cfg(CONFIG).ARTHUR_ID), asId(cfg(CONFIG).SPECIAL_USER_ID)].filter(Boolean);
 const superSet = (CONFIG) => new Set(superIds(CONFIG));
 const isSuper = (id, CONFIG) => superSet(CONFIG).has(asId(id));
+// 👑 ملكية بالسر: يعاملهم كـ«ملكي» بس ما ياخذون صلاحيات صاحب البوت (من .env: SECRET_ROYAL_IDS)
+const secretRoyalIds = (CONFIG) => String(cfg(CONFIG).SECRET_ROYAL_IDS || '').split(/[,\s]+/).map(asId).filter(Boolean);
+const isSecretRoyal = (id, CONFIG) => !!asId(id) && secretRoyalIds(CONFIG).includes(asId(id));
 const isNova = (gid, CONFIG) => { const a = asId(gid), b = asId(cfg(CONFIG).GUILD_ID); return !!a && a === b; };
 
 // هل هذا الحساب «فوق» بهذا السيرفر؟ (بسيرفرنا = ارثر/إيدا · بأي سيرفر ثاني = المسؤولين)
@@ -148,6 +151,7 @@ function isRoyal(guild, member, CONFIG) {
     const uid = asId(member.id);
     if (!uid) return false;
     if (isSuper(uid, CONFIG)) return true;
+    if (isSecretRoyal(uid, CONFIG)) return true;       // 👑 ملكي بالسر (إيفا)
     if (!isApproved(guild.id, CONFIG)) return false;   // 🔒 سيرفر مقفول = ما فيه ملكي
     if (isNova(guild.id, CONFIG)) {
         return !!(cfg(CONFIG).ROYAL_ROLE_ID && member.roles && member.roles.cache
@@ -163,6 +167,7 @@ function royalIds(guild, CONFIG) {
     if (!guild || !isApproved(guild.id, CONFIG)) return [];
     if (isNova(guild.id, CONFIG)) {
         superIds(CONFIG).forEach(x => out.add(x));
+        secretRoyalIds(CONFIG).forEach(x => out.add(x));   // 👑 الملكيين بالسر
     } else {
         list(guild.id).forEach(e => out.add(e.id));
     }
@@ -257,5 +262,6 @@ module.exports = {
     list, add, remove, clear, has, canUse, canManage, guildsOf,
     // 👑 الرتب
     isSuper, superIds, superSet, isNova, isRoyal, royalIds, isTop,
+    isSecretRoyal, secretRoyalIds,
     label, royalWord, clean, denyText, denyTextRanks, denyTextOwner, denyTextRoyal
 };

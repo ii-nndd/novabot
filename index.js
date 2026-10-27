@@ -57,7 +57,9 @@ const CONFIG = {
         '1550879705115398156': 'nabd'    // نبض ارثر / حبيبة ارثر - دلع وحنية خاصة
     },
     // رتبة "بدون احترام": اللي عندهم هالرتبة بس يرجع لهم أسلوب البوت الفظ القديم. الكل غيرهم (حتى بدون رتبة) يعامله البوت باحترام
-    DISRESPECT_ROLE_ID: process.env.DISRESPECT_ROLE_ID || '1559161253249949776'
+    DISRESPECT_ROLE_ID: process.env.DISRESPECT_ROLE_ID || '1559161253249949776',
+    // 👑 ملكية بالسر (بدون صلاحيات صاحب البوت ولا ظهور): الافتراضي إيفا
+    SECRET_ROYAL_IDS: process.env.SECRET_ROYAL_IDS || '1550879705115398156'
 };
 
 // 💘 أزواج «الحب» الثابتة — نسبتها ما تنزل ولا تتغير أبداً مهما صار.
@@ -130,9 +132,15 @@ const rp = (key) => pick(R.get(key));
 mountDashboard(app, express, client, CONFIG);
 welcome.init(client);
 
+// 👑 ملكية بالسر: ناس يعاملهم البوت كـ«ملكي» (نفس صلاحيات رتبة الملكي)
+//    بدون ما ياخذون صلاحيات صاحب البوت (ما يفتحون اللوحة ولا الصفحات الخاصة).
+//    من .env: SECRET_ROYAL_IDS=آيدي,آيدي  (الافتراضي: إيفا)
+const secretRoyal = (id) => String(CONFIG.SECRET_ROYAL_IDS || '').split(/[,\s]+/).filter(Boolean).indexOf(String(id)) >= 0;
+
 function getTier(userId, member) {
     if (userId === CONFIG.ARTHUR_ID) return 'arthur';
     if (userId === CONFIG.SPECIAL_USER_ID) return 'ida';
+    if (secretRoyal(userId)) return 'royal';   // 👑 ملكي بالسر (إيفا)
     const guild = member && member.guild ? member.guild : null;
     // 🌐 أي سيرفر غير سيرفرنا: «الملكي» = صاحب السيرفر + اللي أعطاه صلاحية الدخول
     if (guild && !access.isNova(guild.id, CONFIG)) {
