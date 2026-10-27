@@ -63,9 +63,12 @@ const CONFIG = {
 // 💘 أزواج «الحب» الثابتة — نسبتها ما تنزل ولا تتغير أبداً مهما صار.
 // الصيغة: { a: 'آيدي الأول', b: 'آيدي الثاني', pct: النسبة } — وتشتغل بالاتجاهين.
 const LOVE_FIXED = [
-    { a: '848996426918002731', b: '1550879705115398156', pct: 100 },  // ارثر ❤️ نبض
-    { a: '848996426918002731', b: '1542941271205875812', pct: 100 }   // ارثر ❤️ إيدا
+    { a: '848996426918002731', b: '1550879705115398156', pct: 100 }   // عبد ❤️ إيفا (ثابت 100%)
 ];
+
+// 💘 مسموح لهم باستخدام أمر /حب زيادة على الملكيين (آيديات مفصولة بفاصلة) — من .env:
+//    LOVE_ALLOW_IDS=123456789,987654321
+const LOVE_ALLOW_IDS = String(process.env.LOVE_ALLOW_IDS || '').split(/[,\s]+/).filter(Boolean);
 
 // نسبة الحب: لو الزوجين بالقائمة الثابتة نرجّع نسبتهم المحفوظة، وإلا الحساب القديم
 function lovePercent(x, y) {
@@ -330,7 +333,7 @@ const commands = [
             )),
     new SlashCommandBuilder().setName('تخمين').setDescription('خمن الرقم من 1 إلى 10')
         .addIntegerOption(o => o.setName('رقم').setDescription('تخمينك').setRequired(true).setMinValue(1).setMaxValue(10)),
-    new SlashCommandBuilder().setName('حب').setDescription('نسبة التوافق بين شخصين')
+    new SlashCommandBuilder().setName('حب').setDescription('نسبة التوافق بين شخصين (للإدارة والأسماء المحددة)')
         .addUserOption(o => o.setName('الاول').setDescription('الشخص الأول').setRequired(true))
         .addUserOption(o => o.setName('الثاني').setDescription('الشخص الثاني (الافتراضي أنت)')),
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
@@ -628,6 +631,8 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             case 'حب': {
+                // 🔒 خاص: الملكي/الإدارة + الأسماء المحددة في LOVE_ALLOW_IDS (من .env)
+                if (!hasAccess(tier) && LOVE_ALLOW_IDS.indexOf(interaction.user.id) < 0) return denied();
                 const a = interaction.options.getUser('الاول');
                 const b = interaction.options.getUser('الثاني') ?? interaction.user;
                 const r = lovePercent(a.id, b.id);

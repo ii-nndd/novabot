@@ -510,12 +510,8 @@ function state(gid) {
 }
 
 function init(client, CONFIG) {
-    client.on('messageCreate', (m) => {
-        try {
-            if (!shouldAnswer(m, client)) return;
-            answer(m, {}).catch(() => { });
-        } catch { }
-    });
+    // ⚠️ ما نسجّل listener هنا: index.js هو اللي يستدعي shouldAnswer/answer (وعنده فحص الكولداون).
+    //    لو سجّلنا هنا كذلك → كل رسالة تُجاوب **مرتين** (رد مكرر) — صار فعلاً وانتقلناه.
     const any = Object.keys(all()).length;
     console.log(`🤖 الذكاء الاصطناعي جاهز${any ? '' : ' (ما فيه إعدادات بعد — فعّله من اللوحة)'}`);
 }
