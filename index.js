@@ -34,6 +34,7 @@ const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
 const tsfunnel = require('./tsfunnel');
 const access = require('./access');
+const cmdaccess = require('./cmdaccess');
 
 // ====================================================================
 // 1. الإعدادات (عدل الآي ديهات هنا فقط)
@@ -522,6 +523,19 @@ client.on('interactionCreate', async (interaction) => {
             flags: MessageFlags.Ephemeral
         }).catch(() => {});
     }
+    // 🔐 صلاحية الأوامر (تُدار من اللوحة ← «الأوامر»): من يقدر يستخدم أي أمر
+    //    «مساعدة» و«حماية» مستثنين دايماً (حماية = لازم تشتغل بأي وقت، ومساعدة = عشان يعرف الأوامر)
+    if (interaction.guild && ['حماية', 'مساعدة'].indexOf(interaction.commandName) < 0) {
+        const gate = cmdaccess.check(interaction.guild.id, interaction.commandName, {
+            userId: interaction.user.id,
+            member: interaction.member,
+            tier: getTier(interaction.user.id, interaction.member),
+            extraIds: LOVE_ALLOW_IDS
+        });
+        if (!gate.ok) {
+            return interaction.reply({ content: gate.text, flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+    }
     if (await tickets.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await games.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick, access })) return;
@@ -639,8 +653,7 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             case 'حب': {
-                // 🔒 خاص: الملكي/الإدارة + الأسماء المحددة في LOVE_ALLOW_IDS (من .env)
-                if (!hasAccess(tier) && LOVE_ALLOW_IDS.indexOf(interaction.user.id) < 0) return denied();
+                // 🔒 الصلاحية تُدار من اللوحة ← صفحة «الأوامر» (والافتراضي: الإدارة والملكي)
                 const a = interaction.options.getUser('الاول');
                 const b = interaction.options.getUser('الثاني') ?? interaction.user;
                 const r = lovePercent(a.id, b.id);

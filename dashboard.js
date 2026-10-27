@@ -25,6 +25,7 @@ const access = require('./access');
 const reactions = require('./reactions');
 const ai = require('./ai');
 const replies2 = require('./replies2');
+const cmdaccess = require('./cmdaccess');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -52,7 +53,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-28.2';
+const BUILD = '2026-10-28.3';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -316,7 +317,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
 function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper)&&d.public!==false;return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
@@ -1633,6 +1634,78 @@ pages.access=function(m){return api('access').then(function(d){
  if(d.isSuper)m.appendChild(el('div',{class:'mut',style:'margin-top:4px',text:'إدارة نوفا (ارثر/إيدا) داخلين كل السيرفرات تلقائياً.'}));
  m.appendChild(el('div',{class:'row',style:'margin-top:10px'},[el('button',{class:'b2',text:'🔄 تحديث',on:{click:function(){show('access')}}})]));
 })}
+// 🔐 الأوامر: من يقدر يستخدم كل أمر (لكل سيرفر)
+pages.cmd=function(m){return api('cmdaccess').then(function(d){
+ m.appendChild(el('h1',{text:'الأوامر والصلاحيات'}));
+ m.appendChild(el('div',{class:'mut',text:'هنا تحدد من يقدر يستخدم كل أمر بالبوت. التقييد فقط — ما يعطي أحد صلاحية أكبر من صلاحيته الأصلية، وارثر/إيدا ما ينقفل عليهم شي أبداً.'}));
+ if(!d.canManage){m.appendChild(card('ما عندك صلاحية',el('div',{class:'mut',text:'تعديل صلاحية الأوامر يسويه صاحب السيرفر أو إدارة نوفا فقط.'})));return}
+ var cfgs=d.config||{},names=d.commands||[],labels=d.labels||{};
+ function chip(md){return el('span',{class:md==='all'?'tag on':(md==='off'?'tag off':'tag'),text:labels[md]||md})}
+ var cm=null;
+ function cclose(){if(cm){cm.remove();cm=null}}
+ function box(title,node){cclose();var b=el('div',{class:'ovc'},[el('div',{class:'row'},[el('div',{class:'cat',style:'margin:0;flex:1',text:title}),el('button',{class:'b2',text:'✕ إغلاق',on:{click:cclose}})]),node]);cm=el('div',{class:'ov'},[b]);cm.addEventListener('click',function(e){if(e.target===cm)cclose()});document.body.appendChild(cm)}
+ function edit(name){
+  var c=cfgs[name]||{mode:'all',ids:[],roles:[]};
+  var md=el('select',{},[opt('all','الكل 🌐 — أي عضو يقدر'),opt('royal','الإدارة والملكي 👑'),opt('custom','مخصص 🎯 — الملكي + ناس/رتب'),opt('off','مقفول 🔒 — ما يستخدمه أحد')]);
+  md.value=c.mode||'all';
+  var ids=el('textarea',{rows:'3',placeholder:'آيديات الأشخاص (كل آيدي بسطر أو بفاصلة)',style:'width:100%;margin-top:6px'});
+  ids.value=(c.ids||[]).join('\\n');
+  var rs=el('select',{multiple:'multiple',size:'6',style:'width:100%;margin-top:6px'},(d.roles||[]).map(function(r){return opt(r.id,r.name)}));
+  var ch={};(c.roles||[]).forEach(function(x){ch[x]=1});
+  Array.prototype.forEach.call(rs.options,function(o){if(ch[o.value])o.selected=true});
+  var save=el('button',{class:'btn',text:'💾 حفظ'});
+  save.addEventListener('click',function(){
+   var roles=[];Array.prototype.forEach.call(rs.options,function(o){if(o.selected)roles.push(o.value)});
+   save.disabled=true;
+   api('cmdaccess/save',{name:name,mode:md.value,ids:ids.value,roles:roles.join(',')}).then(function(){cclose();toast('تم حفظ صلاحية /'+name+' ✅');show('cmd')}).catch(function(e){save.disabled=false;toast(e.message,1)});
+  });
+  box('/'+name,el('div',{},[
+   el('div',{class:'mut',text:'من يقدر يستخدم هذا الأمر؟'}),md,
+   el('div',{class:'mut',style:'margin-top:10px',text:'أشخاص محددون (آيديات) — تشتغل مع «الإدارة والملكي» و«مخصص»'}),ids,
+   el('div',{class:'mut',style:'margin-top:10px',text:'رتب محددة (تختار واحدة أو أكثر بـCtrl) — تشتغل مع «مخصص»'}),rs,
+   el('div',{class:'row',style:'margin-top:12px'},[save])
+  ]));
+ }
+ var listBox=el('div',{});
+ var q=el('input',{placeholder:'🔍 ابحث باسم الأمر…',style:'flex:1;min-width:160px'});
+ function rows(){
+  listBox.innerHTML='';
+  var f=String(q.value||'').trim().toLowerCase(),shown=0;
+  names.forEach(function(n){
+   if(f&&n.toLowerCase().indexOf(f)<0)return;
+   shown++;
+   var c=cfgs[n]||{mode:'all'};
+   var b=el('button',{class:'b2',text:'⚙️ تعديل'});
+   b.addEventListener('click',function(){edit(n)});
+   listBox.appendChild(el('div',{class:'item'},[el('div',{style:'flex:1;min-width:0'},[el('div',{class:'nm',text:'/'+n})]),chip(c.mode||'all'),b]));
+  });
+  if(!shown)listBox.appendChild(el('div',{class:'mut',text:'ما فيه أمر بهذا الاسم.'}));
+ }
+ q.addEventListener('input',rows);rows();
+ m.appendChild(card('الأوامر ('+names.length+')',el('div',{},[
+  el('div',{class:'mut',text:'💘 أمر /حب افتراضياً للإدارة والملكي — لو تبي تضيف ناس، اختر «مخصص» وحط آيدياتهم.'}),
+  el('div',{class:'row',style:'margin-top:10px'},[q]),
+  el('div',{style:'margin-top:10px'},[listBox])
+ ])));
+ function bulk(mode,warn){
+  if(warn&&!confirm(warn))return;
+  api('cmdaccess/bulk',{mode:mode,confirm:true}).then(function(r){toast('تم تطبيق الوضع على '+r.count+' أمر ✅');show('cmd')}).catch(function(e){toast(e.message,1)});
+ }
+ function resetAll(){
+  if(!confirm('ترجع كل الأوامر مثل الأصل (الكل يقدر)؟'))return;
+  api('cmdaccess/reset',{}).then(function(){toast('تم التصفير ✅');show('cmd')}).catch(function(e){toast(e.message,1)});
+ }
+ m.appendChild(card('تقييد سريع لكل الأوامر',el('div',{},[
+  el('div',{class:'mut',text:'يطبّق نفس الوضع على كل الأوامر المسجلة بالسيرفر — وبعدها تعدل كل أمر لحاله.'}),
+  el('div',{class:'row',style:'margin-top:10px'},[
+   el('button',{class:'b2',text:'🌐 الكل',on:{click:function(){bulk('all')}}}),
+   el('button',{class:'b2',text:'👑 الإدارة والملكي',on:{click:function(){bulk('royal','تخلي كل الأوامر للإدارة والملكي فقط؟')}}}),
+   el('button',{class:'dn',text:'🔒 اقفل الكل',on:{click:function(){bulk('off','تقفل كل الأوامر؟ (ارثر/إيدا ما ينقفل عليهم)')}}})
+  ]),
+  el('div',{class:'row',style:'margin-top:8px'},[el('button',{class:'b2',text:'🔄 تصفير كل التقييد',on:{click:function(){resetAll()}}})])
+ ])));
+ m.appendChild(el('div',{class:'row',style:'margin-top:10px'},[el('button',{class:'b2',text:'🔄 تحديث',on:{click:function(){show('cmd')}}})]));
+})}
 // شاشة اختيار السيرفر (لمن عنده صلاحية أكثر من سيرفر)
 function guildPicker(d){var m=el('div',{class:'main'},[el('div',{class:'hero'},[el('div',{class:'hlogo',text:'🏠'}),el('div',{style:'flex:1'},[el('h1',{text:'اختر السيرفر'}),el('div',{class:'sub',text:'عندك صلاحية دخول لوحة أكثر من سيرفر — اختر اللي تبي تديره'})])])]);
  var box=el('div',{});
@@ -2786,6 +2859,62 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         access.clear(g.id);
         note(req, 'تصفير قائمة المسموحين بالدخول');
         return { ok: true, list: [] };
+    }));
+
+    // ===== 🔐 صلاحية الأوامر: من يقدر يستخدم أي أمر (لكل سيرفر) =====
+    const cmdNames = (g) => {
+        let out = [];
+        try { out = [...g.commands.cache.values()].map(c => c.name); } catch { out = []; }
+        return out.filter(Boolean).sort();
+    };
+    api.get('/cmdaccess', h(async (g, b, req) => {
+        const s = session(req);
+        const cfg = cmdaccess.get(g.id);
+        const commands = cmdNames(g);
+        const config = {};
+        commands.forEach(n => { config[n] = cfg[n] || { mode: (cmdaccess.DEF[n] ? cmdaccess.DEF[n].mode : 'all'), ids: [], roles: [] }; });
+        return {
+            canManage: access.canManage(g, s.id, CONFIG),
+            commands,
+            config,
+            labels: cmdaccess.MODE_LABEL,
+            modes: cmdaccess.MODES,
+            roles: [...g.roles.cache.values()]
+                .filter(r => !r.managed && r.id !== g.id)
+                .sort((a, b2) => b2.position - a.position)
+                .slice(0, 200)
+                .map(r => ({ id: r.id, name: r.name })),
+            guild: { id: g.id, name: g.name }
+        };
+    }));
+    api.post('/cmdaccess/save', h(async (g, b, req) => {
+        const s = session(req);
+        if (!access.canManage(g, s.id, CONFIG)) throw new Error('تعديل صلاحية الأوامر يسويه صاحب السيرفر أو إدارة نوفا فقط');
+        const name = String((b && b.name) || '').trim();
+        if (!name) throw new Error('اسم الأمر مطلوب');
+        const mode = String((b && b.mode) || 'all');
+        if (cmdaccess.MODES.indexOf(mode) < 0) throw new Error('وضع غير معروف');
+        const e = cmdaccess.setOne(g.id, name, { mode, ids: b && b.ids, roles: b && b.roles });
+        note(req, `صلاحية الأمر /${name} = ${cmdaccess.MODE_LABEL[mode] || mode}`);
+        return { ok: true, entry: e };
+    }));
+    api.post('/cmdaccess/bulk', h(async (g, b, req) => {
+        const s = session(req);
+        if (!access.canManage(g, s.id, CONFIG)) throw new Error('تعديل صلاحية الأوامر يسويه صاحب السيرفر أو إدارة نوفا فقط');
+        const mode = String((b && b.mode) || 'all');
+        if (cmdaccess.MODES.indexOf(mode) < 0) throw new Error('وضع غير معروف');
+        if (mode === 'all') cmdaccess.reset(g.id);
+        const names = cmdNames(g);
+        const n = mode === 'all' ? 0 : cmdaccess.setMany(g.id, names, mode, b && b.ids, b && b.roles);
+        note(req, `تطبيق «${cmdaccess.MODE_LABEL[mode] || mode}» على ${mode === 'all' ? names.length : n} أمر`);
+        return { ok: true, count: mode === 'all' ? names.length : n };
+    }));
+    api.post('/cmdaccess/reset', h(async (g, b, req) => {
+        const s = session(req);
+        if (!access.canManage(g, s.id, CONFIG)) throw new Error('تعديل صلاحية الأوامر يسويه صاحب السيرفر أو إدارة نوفا فقط');
+        cmdaccess.reset(g.id);
+        note(req, 'تصفير صلاحيات الأوامر');
+        return { ok: true };
     }));
 
     // أي مسار API غير معروف يرجّع JSON وليس صفحة HTML (كان يرجّع HTML 404 لما تكون الجلسة صالحة => يطلع خطأ «Unexpected token '<'» بالمتصفح)
