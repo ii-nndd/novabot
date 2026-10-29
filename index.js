@@ -28,6 +28,7 @@ const hub = require('./hub');
 const colors = require('./colors');
 const reactions = require('./reactions');
 const ai = require('./ai');
+const tts = require('./tts');
 const extra = require('./extra');
 const replies2 = require('./replies2');
 const mountPanel = require('./panel');
@@ -221,8 +222,8 @@ async function connectToVoice(force = false) {
             channelId: channel.id,
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
-            selfDeaf: false,
-            selfMute: true
+            selfDeaf: true,      // ما يسمع (ما نحتاج) — بس يقدر يتكلم 🎙️
+            selfMute: false      // مهم: مكتوم = ما يقدر يقول شي، ولذلك نخليه يفتح المايك
         });
         connection = conn;
         currentVoiceId = channel.id;
@@ -350,7 +351,7 @@ const commands = [
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('ألوان').setDescription('يعيد توليد صورة الألوان ويحدّث بانل الألوان (للملكيين فقط)'),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands, hub.commands, ai.commands, extra.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands, guard.commands, hub.commands, ai.commands, tts.commands, extra.commands);
 
 // 🔁 مزامنة أوامر سيرفر واحد:
 //    مفعّل → تنزل كل الأوامر · مقفول 🔒 → تنمسح أوامره (ما يقدر أحد يجرّب البوت)
@@ -408,6 +409,16 @@ async function onClientReady() {
         trap.init(client, CONFIG);
         reactions.init(client);          // 😍 تفاعل تلقائي مع الصور (بدون صلاحيات إضافية)
         ai.init(client, CONFIG);         // 🤖 الذكاء الاصطناعي (منشن/رد/أمر اسأل)
+        tts.init(client, CONFIG, {       // 🎙️ صوت العبد (نقل البوت لروم صوتي معيّن)
+            move: async (guild, channel) => {
+                if (!guild || !channel || !guild.id) return false;
+                if (!channel.isVoiceBased()) return false;
+                try { botcontrol.set(guild.id, { voiceEnabled: true, voiceChannelId: channel.id }); } catch { }
+                if (guild.id !== CONFIG.GUILD_ID) return false;   // الفويس 24/7 لسيرفرنا بس
+                await connectToVoice(true);
+                return isInVoice() && String(currentVoiceId) === String(channel.id);
+            }
+        });
         guard.init(client, CONFIG);
         presence.init(client, CONFIG);
         colors.init(client, CONFIG);
@@ -545,6 +556,7 @@ client.on('interactionCreate', async (interaction) => {
     if (await economy.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await hub.handle(interaction, { getTier, CONFIG, pick, access })) return;   // 🎛️ /لوحة_تحكم
     if (await ai.handle(interaction)) return;                                        // 🤖 /اسأل
+    if (await tts.handle(interaction)) return;                                       // 🎙️ /قول
     if (await extra.handle(interaction, { getTier, CONFIG, pick, access })) return;  // 🎮 أوامر إضافية
     if (await giveaway.handle(interaction, { getTier, CONFIG, pick, access })) return;
     if (await selfroles.handle(interaction, { getTier, CONFIG, pick, access })) return;
@@ -903,6 +915,14 @@ client.on('messageCreate', async (message) => {
             : (t && typeof t === 'object' && typeof t.content === 'string'
                 ? { ...t, content: access.clean(t.content, message.guild, CONFIG) } : t)
     );
+
+    // 🎙️ «يا عبد قول <نص>» → صوت العبد (ملف صوتي + يتكلمه بالروم الصوتي)
+    const sayOrder = content.replace(/^\s*(?:يا\s+)?(?:عبد|العبد)\s*/i, '').trim();
+    const sayHit = sayOrder.match(/^(?:قول|تكلم|انطق)\s+([\s\S]{2,900})$/);
+    if (sayHit) {
+        if (onCooldown(message.author.id, tts.get(message.guild.id).cooldownSec || 8)) return;
+        return void tts.handleText(message, sayHit[1]).catch(() => {});
+    }
 
     // الكلمات الخاصة (من اللوحة) - حسب الرتبة، وحسب الشخصية الخاصة (روان/نبض ارثر) لو موجودة
     if (canAdmin || persona) {

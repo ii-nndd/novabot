@@ -23,6 +23,7 @@ const giveaway = require('./giveaway');
 const admin = require('./admin');
 const access = require('./access');
 const reactions = require('./reactions');
+const tts = require('./tts');
 const ai = require('./ai');
 const replies2 = require('./replies2');
 const cmdaccess = require('./cmdaccess');
@@ -53,7 +54,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-29.2';
+const BUILD = '2026-10-29.3';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -317,7 +318,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['tts','🎙️','صوت العبد'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
 function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
@@ -823,6 +824,74 @@ pages.react=function(m){return api('react').then(function(d){
  m.appendChild(el('div',{class:'row',style:'margin-top:14px;gap:8px;flex-wrap:wrap'},[saveBtn,resetBtn]));
  return;
 })}
+// ===== 🎙️ صوت العبد =====
+pages.tts=function(m){
+ m.appendChild(el('h1',{text:'صوت العبد 🎙️'}));
+ m.appendChild(el('div',{class:'mut',style:'line-height:1.9',text:'العبد يحوّل أي كلام لصوت عربي فخم: بالأمر /قول أو بكتابة «يا عبد قول …». يرسل ملف صوتي، وإذا كان داخل روم صوتي يتكلمه بعد.'}));
+ return api('tts').then(function(d){
+  var dd=d||{},c=dd.cfg||{},vs=dd.voices||[];
+  var st={enabled:c.enabled!==false,speakInVoice:c.speakInVoice!==false,voice:c.voice||'fakhem'};
+  var cur=null;for(var i=0;i<vs.length;i++){if(vs[i].key===st.voice)cur=vs[i]}
+  m.appendChild(card('الحالة',el('div',{},[
+   el('div',{class:'row'},[
+    el('span',{class:'tag '+(st.enabled?'on':'off'),text:st.enabled?'✅ شغال':'⛔ مطفّي'}),
+    el('span',{class:'tag',text:dd.ready?'🔑 المفتاح جاهز':'⚠️ بدون مفتاح (صوت بديل)'}),
+    el('span',{class:'tag',text:'🎙️ '+vs.length+' أصوات'}),
+    el('span',{class:'tag',text:'الصوت: '+((cur&&cur.label)||st.voice)})
+   ]),
+   el('div',{class:'mut',style:'margin-top:8px',text:'الصوت من Google Gemini (مجاني بلا بطاقة). لو خلص الحد اليومي يتحوّل تلقائياً لصوت Google البديل عشان الأمر ما يتعطل.'})
+  ])));
+  m.appendChild(card('التشغيل',el('div',{},[
+   el('div',{class:'row'},[sw(st.enabled,function(v){st.enabled=v}),el('span',{text:'تشغيل أمر الصوت'})]),
+   el('div',{class:'row',style:'margin-top:8px'},[sw(st.speakInVoice,function(v){st.speakInVoice=v}),el('span',{text:'يتكلمه بالروم الصوتي بعد ما يرسله'})])
+  ])));
+  var grid=el('div',{class:'row',style:'gap:8px;flex-wrap:wrap'});
+  var btns=[];
+  vs.forEach(function(v){
+   var b=el('button',{class:'b2',style:'padding:10px 14px;font-size:14px'});
+   b.textContent=v.label;
+   b.title=v.desc||'';
+   b.addEventListener('click',function(){st.voice=v.key;paint()});
+   btns.push({k:v.key,b:b,label:v.label});
+   grid.appendChild(b);
+  });
+  function paint(){btns.forEach(function(x){var on=x.k===st.voice;x.b.style.borderColor=on?'#e0232f':'';x.b.style.boxShadow=on?'0 0 0 2px rgba(224,35,47,.45)':'none';x.b.textContent=(on?'✅ ':'')+x.label})}
+  paint();
+  var pv=el('input',{value:'أنا العبد، بوت سيرفر نوفا الملكي. تحت أمرك يا طويل العمر.',style:'width:100%;margin-top:10px'});
+  var prevBtn=el('button',{class:'btn',text:'🎧 اسمع الصوت المختار'});
+  prevBtn.addEventListener('click',function(){
+   prevBtn.disabled=true;
+   api('tts/preview',{voice:st.voice,text:pv.value}).then(function(r){
+    prevBtn.disabled=false;
+    if(!r||!r.data)return toast('ما رجع صوت',1);
+    if(typeof Audio!=='function')return toast('متصفحك ما يدعم التشغيل هنا — جرّبه بالديسكورد',1);
+    var a=new Audio(r.data);
+    a.play().catch(function(){toast('المتصفح منع التشغيل — اضغط الزر مرة ثانية',1)});
+    toast('تولّد في '+(r.ms||0)+' مللي ثانية');
+   }).catch(function(e){prevBtn.disabled=false;toast(e.message,1)});
+  });
+  m.appendChild(card('🎙️ الأصوات',el('div',{},[
+   grid,
+   el('div',{class:'mut',style:'margin-top:8px;font-size:12px',text:'رهيب (عميق قوي) · فخم (واثق هادي، الافتراضي) · وقور · هادي · دافي · رصين. اختر واسمع قبل الحفظ.'}),
+   pv,
+   el('div',{class:'row',style:'margin-top:10px'},[prevBtn])
+  ])));
+  var mx=el('input',{type:'number',value:String(c.maxChars||dd.maxText||600),style:'width:120px'});
+  var cd=el('input',{type:'number',value:String(c.cooldownSec==null?8:c.cooldownSec),style:'width:120px'});
+  m.appendChild(card('الحدود',el('div',{class:'row',style:'gap:16px;flex-wrap:wrap'},[
+   el('div',{},[el('div',{class:'mut',text:'أقصى طول نص'}),mx]),
+   el('div',{},[el('div',{class:'mut',text:'فاصل بين الطلبات (ثانية)'}),cd])
+  ])));
+  var saveBtn=el('button',{class:'btn',text:'💾 حفظ'});
+  saveBtn.addEventListener('click',function(){
+   saveBtn.disabled=true;
+   api('tts/save',{enabled:st.enabled,speakInVoice:st.speakInVoice,voice:st.voice,maxChars:Number(mx.value)||600,cooldownSec:Number(cd.value)||0}).then(function(){toast('انحفظ ✅');show('tts')}).catch(function(e){saveBtn.disabled=false;toast(e.message,1)});
+  });
+  var resetBtn=el('button',{class:'b2',text:'🔄 رجوع الافتراضي'});
+  resetBtn.addEventListener('click',function(){resetBtn.disabled=true;api('tts/reset',{}).then(function(){toast('رجع للافتراضي');show('tts')}).catch(function(e){resetBtn.disabled=false;toast(e.message,1)})});
+  m.appendChild(el('div',{class:'row',style:'margin-top:14px;gap:8px;flex-wrap:wrap'},[saveBtn,resetBtn]));
+ });
+}
 // ===== 🤖 الذكاء الاصطناعي =====
 pages.ai=function(m){
  m.appendChild(el('h1',{text:'الذكاء الاصطناعي 🤖'}));
@@ -1938,6 +2007,34 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         reactions.reset(g.id);
         note(req, 'رجوع إعدادات الرياكشن للافتراضي');
         return { ok: true, cfg: reactions.get(g.id) };
+    }));
+
+    // ===== 🎙️ صوت العبد: تحويل النص لصوت عربي فخم =====
+    api.get('/tts', h(async (g) => ({
+        cfg: tts.get(g.id),
+        ready: tts.ready(g.id),
+        voices: tts.VOICE_KEYS.map(k => ({ key: k, label: tts.VOICES[k].label, desc: tts.VOICES[k].desc })),
+        maxText: tts.MAX_TEXT
+    })));
+    api.post('/tts/save', h(async (g, b, req) => {
+        const cfg = tts.set(g.id, b);
+        note(req, `حفظ إعدادات صوت العبد (${cfg.voice})`);
+        return { ok: true, cfg };
+    }));
+    api.post('/tts/reset', h(async (g, b, req) => {
+        tts.reset(g.id);
+        note(req, 'رجوع إعدادات صوت العبد للافتراضي');
+        return { ok: true, cfg: tts.get(g.id) };
+    }));
+    api.post('/tts/preview', h(async (g, b) => {
+        const text = String((b && b.text) || '').trim().slice(0, 140) || 'أنا العبد، بوت سيرفر نوفا الملكي.';
+        const out = await tts.synth(text, { gid: g.id, voice: (b && b.voice) || '' });
+        return {
+            ok: true,
+            kind: out.kind,
+            ms: out.ms,
+            data: 'data:audio/' + (out.kind === 'mp3' ? 'mpeg' : 'wav') + ';base64,' + out.buf.toString('base64')
+        };
     }));
 
     // ===== 🤖 الذكاء الاصطناعي =====
