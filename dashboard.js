@@ -53,7 +53,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-28.3';
+const BUILD = '2026-10-29.1';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -319,7 +319,7 @@ function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEvent
 var pages={},cur='overview',PAGE_T=null;
 var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
-function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper)&&d.public!==false;return true}
+function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}

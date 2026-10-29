@@ -29,6 +29,9 @@ const access = require('./access');
 const { SlashCommandBuilder } = require('discord.js');
 
 const FILE = 'aicfg.json';
+// 🧠 مرجع البوت والإعدادات (ينحطّون بـinit) — عشان الذكاء يعرف «من يكلمه» تلقائياً
+let CL = null;       // client
+let CFG = null;      // CONFIG (فيه آيديات ارثر/إيدا/إيفا/الرتبة الملكية)
 const TIMEOUT_MS = 30_000;      // مهلة أي طلب للذكاء الاصطناعي
 const MAX_Q = 1500;             // أقصى طول للسؤال
 const MAX_CHANNELS = 30;        // أقصى عدد رومات مسموحة
@@ -339,6 +342,81 @@ async function askChat(cfg, key, q, hist) {
     return t;
 }
 
+// ===== 🧠 من يكلم البوت؟ (معرفة تلقائية بالأشخاص) =====
+// نجيب اسم أي حساب من الكاش (العضو بالسيرفر أولاً ثم حساب ديسكورد)
+function nameOf(id, guild) {
+    const uid = String(id || '');
+    if (!uid) return '';
+    try {
+        const m = guild && guild.members && guild.members.cache ? guild.members.cache.get(uid) : null;
+        if (m) return String(m.nickname || (m.user && (m.user.globalName || m.user.username)) || '').trim();
+        const u = CL && CL.users && CL.users.cache ? CL.users.cache.get(uid) : null;
+        if (u) return String(u.globalName || u.username || '').trim();
+    } catch { }
+    return '';
+}
+
+// قائمة «الناس المعروفين»: ارثر · إيدا · إيفا · صاحب السيرفر · أعضاء الرتبة الملكية
+function roster(guild) {
+    const c = CFG || {};
+    const out = [];
+    const seen = new Set();
+    const add = (id, role) => {
+        const x = String(id || '').trim();
+        if (!x || seen.has(x)) return;
+        seen.add(x);
+        const nm = nameOf(x, guild);
+        out.push({ id: x, name: nm, role, known: !!nm });
+    };
+    add(c.ARTHUR_ID, 'صاحب البوت — القرار الأعلى');
+    add(c.SPECIAL_USER_ID, 'الملكة — صلاحيات كاملة مثل صاحب البوت');
+    String(c.SECRET_ROYAL_IDS || '').split(/[,\s]+/).filter(Boolean).forEach(x => add(x, 'من الملكيين (بالسر)'));
+    if (guild && guild.ownerId) add(guild.ownerId, 'صاحب السيرفر');
+    try {
+        const r = c.ROYAL_ROLE_ID && guild && guild.roles && guild.roles.cache ? guild.roles.cache.get(String(c.ROYAL_ROLE_ID)) : null;
+        if (r && r.members) [...r.members.values()].slice(0, 12).forEach(m => add(m.id, 'من الملكيين'));
+    } catch { }
+    return out;
+}
+
+// وصف اللي يكلمك الآن + مكانته (عشان يفرّق بين الناس)
+function whoBlock(user, member, guild) {
+    if (!user) return [];
+    const c = CFG || {};
+    const id = String(user.id || '');
+    const nm = String((member && member.nickname) || user.globalName || user.username || '').slice(0, 40) || 'عضو';
+    let tier = 'عضو عادي';
+    try {
+        if (c.ARTHUR_ID && id === String(c.ARTHUR_ID)) tier = 'صاحب البوت (القرار الأعلى)';
+        else if (c.SPECIAL_USER_ID && id === String(c.SPECIAL_USER_ID)) tier = 'الملكة (صلاحيات كاملة)';
+        else if (access.isSecretRoyal(id, CFG)) tier = 'من الملكيين (بالسر)';
+        else if (guild && guild.ownerId && id === String(guild.ownerId)) tier = 'صاحب السيرفر';
+        else if (member && c.ROYAL_ROLE_ID && member.roles && member.roles.cache && member.roles.cache.has(String(c.ROYAL_ROLE_ID))) tier = 'من الملكيين';
+    } catch { }
+    return [
+        '— اللي يكلمك الآن:',
+        'الاسم: ' + nm + ' · الآيدي: ' + id + ' · مكانته: ' + tier,
+        'خاطبه باسمه، ولا تخلط بينه وبين أي شخص ثاني. كل شخص له أسلوبه وكلامه ما ينسبه لغيره.'
+    ];
+}
+
+// الشخصية + المعلومات الحيّة (ما نلمس شخصية صاحب المشروع المحفوظة — نضيف تحتها فقط)
+function personaFor(cfg, o) {
+    const opt = o || {};
+    const guild = opt.guild || null;
+    const parts = [String((cfg && cfg.persona) || DEF.persona).trim()];
+    const lines = [];
+    if (guild) lines.push('— عن السيرفر: اسمه «' + String(guild.name || '').slice(0, 60) + '».');
+    const people = guild ? roster(guild) : [];
+    if (people.length) {
+        lines.push('— الأشخاص المعروفون عندك (اعرفهم بنفسك، لا تسأل أحد عن آيدياتهم):');
+        people.forEach(p => lines.push('• ' + (p.name || 'حساب') + (p.known ? '' : ' (آيدي ' + p.id + ')') + ' — ' + p.role));
+    }
+    lines.push(...whoBlock(opt.user, opt.member, guild));
+    if (lines.length) parts.push('', ...lines);
+    return parts.join('\n').slice(0, 4000);
+}
+
 // ===== اسأل (المدخل الرئيسي) =====
 async function ask(gid, question, opts) {
     const cfg = (opts && opts.cfg) || get(gid);
@@ -347,9 +425,11 @@ async function ask(gid, question, opts) {
     const q = String(question || '').trim().slice(0, MAX_Q);
     if (!q) throw new Error('اكتب سؤالك أول 🙂');
     const hist = (opts && opts.noMemory) ? [] : historyOf(opts && opts.channelId, cfg);
+    // 🧠 نضيف «من يكلمك» + المعروفين على الشخصية لكل طلب (بدون ما نحفظها)
+    const sys = Object.assign({}, cfg, { persona: personaFor(cfg, opts) });
     const raw = cfg.provider === 'gemini'
-        ? await askGemini(cfg, key, q, hist)
-        : await askChat(cfg, key, q, hist);
+        ? await askGemini(sys, key, q, hist)
+        : await askChat(sys, key, q, hist);
     return noPing(String(raw || '').trim()).slice(0, 4000);
 }
 
@@ -431,9 +511,17 @@ async function answer(message, opts) {
         if (!q || q.length < 2) return false;
         try { await message.channel.sendTyping(); } catch { }
         bumpAsk(r);
-        const t = await ask(gid, q, { cfg, channelId: message.channel && message.channel.id });
-        pushMem(message.channel && message.channel.id, 'user', q, cfg);
-        pushMem(message.channel && message.channel.id, 'model', t, cfg);
+        // 🧠 ذاكرة مستقلة لكل شخص داخل الروم (عشان ما يخلط كلامنا ببعض)
+        const conv = String((message.channel && message.channel.id) || '') + ':u' + message.author.id;
+        const t = await ask(gid, q, {
+            cfg,
+            channelId: conv,
+            guild: message.guild,
+            user: message.author,
+            member: message.member
+        });
+        pushMem(conv, 'user', q, cfg);
+        pushMem(conv, 'model', t, cfg);
         const g = message.guild;
         await sendLong(message, access.clean(t, g));
         return true;
@@ -478,9 +566,16 @@ async function handle(interaction) {
         }
         try {
             bumpAsk(r);
-            const t = await ask(gid, q, { cfg, channelId: interaction.channelId });
-            pushMem(interaction.channelId, 'user', q, cfg);
-            pushMem(interaction.channelId, 'model', t, cfg);
+            const conv = String(interaction.channelId || '') + ':u' + interaction.user.id;
+            const t = await ask(gid, q, {
+                cfg,
+                channelId: conv,
+                guild: interaction.guild,
+                user: interaction.user,
+                member: interaction.member
+            });
+            pushMem(conv, 'user', q, cfg);
+            pushMem(conv, 'model', t, cfg);
             const parts = splitText(access.clean(t, interaction.guild), 1900);
             await interaction.editReply(parts[0]);
             for (let i = 1; i < parts.length; i++) await interaction.followUp(parts[i]).catch(() => { });
@@ -512,12 +607,16 @@ function state(gid) {
 function init(client, CONFIG) {
     // ⚠️ ما نسجّل listener هنا: index.js هو اللي يستدعي shouldAnswer/answer (وعنده فحص الكولداون).
     //    لو سجّلنا هنا كذلك → كل رسالة تُجاوب **مرتين** (رد مكرر) — صار فعلاً وانتقلناه.
+    CL = client || CL;
+    CFG = CONFIG || CFG;
     const any = Object.keys(all()).length;
-    console.log(`🤖 الذكاء الاصطناعي جاهز${any ? '' : ' (ما فيه إعدادات بعد — فعّله من اللوحة)'}`);
+    const who = roster(null).length;
+    console.log(`🤖 الذكاء الاصطناعي جاهز${any ? '' : ' (ما فيه إعدادات بعد — فعّله من اللوحة)'}${who ? ' · يعرف ' + who + ' حساب ملكي' : ''}`);
 }
 
 module.exports = {
     init, get, set, reset, state, ready, ask, test, answer, shouldAnswer, handle,
     canAsk, usageOf, resetUsage, clearMemory, splitText, noPing, cleanQ, providers: PROVIDERS,
+    personaFor, whoBlock, roster, nameOf,
     commands, PROVIDERS, DEF, MAX_Q, MAX_CHANNELS, TIMEOUT_MS
 };
