@@ -1,4 +1,4 @@
-// 🤖 الذكاء الاصطناعي — «عقل نوفا»
+﻿// 🤖 الذكاء الاصطناعي — «عقل نوفا»
 // ----------------------------------------------------------------------------
 //  الفكرة: البوت يقدر يجاوب على أي سؤال بأسلوب نوفا، عبر خدمة ذكاء اصطناعي خارجية.
 //  ثلاثة أماكن ينادى فيها:
@@ -32,13 +32,17 @@ const FILE = 'aicfg.json';
 // 🧠 مرجع البوت والإعدادات (ينحطّون بـinit) — عشان الذكاء يعرف «من يكلمه» تلقائياً
 let CL = null;       // client
 let CFG = null;      // CONFIG (فيه آيديات ارثر/إيدا/إيفا/الرتبة الملكية)
-const TIMEOUT_MS = 30_000;      // مهلة أي طلب للذكاء الاصطناعي
+const TIMEOUT_MS = 22_000;      // مهلة أي محاولة واحدة (كانت ٣٠ وفشلت على موديل بطيء)
+const TRY_BUDGET_MS = 45_000;   // إجمالي كل المحاولات — بعدها نطلع رسالة واضحة
+const MAX_TRY = 4;              // أقصى عدد موديلات نجرّبها
 const MAX_Q = 1500;             // أقصى طول للسؤال
 const MAX_CHANNELS = 30;        // أقصى عدد رومات مسموحة
 
 // المزوّدون + الموديلات المقترحة
+// ⚠️ ترتيب Gemini مقصود: «3.1-flash-lite» الأسرع والأثبت (يرد بـ٠.٥–٢ ثانية) أولاً،
+//    و٣.٨ انشال لأنه كان يتعلّق أكثر من ٤٠ ثانية → يطلع «تأخر رد الذكاء الاصطناعي».
 const PROVIDERS = {
-    gemini: { label: 'Google Gemini (مجاني)', def: 'gemini-3.5-flash', models: ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash'] },
+    gemini: { label: 'Google Gemini (مجاني)', def: 'gemini-3.1-flash-lite', models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash'] },
     groq: { label: 'Groq (مجاني وسريع)', def: 'llama-3.3-70b-versatile', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
     openai: { label: 'OpenAI (مدفوع)', def: 'gpt-4o-mini', models: ['gpt-4o-mini', 'gpt-4o'] }
 };
@@ -55,7 +59,7 @@ const DEF_PERSONA = [
 const DEF = {
     enabled: false,
     provider: 'gemini',
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.1-flash-lite',
     key: '',
     persona: DEF_PERSONA,
     maxPerUser: 30,          // سؤال/عضو باليوم
@@ -79,8 +83,10 @@ const save = (a) => store.write(FILE, a);
 const uniq = (a) => a.filter((x, i) => a.indexOf(x) === i);
 
 // ⚠️ موديلات Gemini الي انسحبت (ترجع 404 للمفاتيح الجديدة) → نبدّلها بأحدث موديل تلقائياً
+//    و٣.٨ انشال كذلك لأنه يتعلّق (يبقى يفكر دقيقة+) → كان يطلع «تأخر رد الذكاء الاصطناعي»
 const DEAD_GEMINI = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash-lite',
-    'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite',
+    'gemini-3.8-flash'];
 const fixModel = (prov, m) => {
     let x = String(m == null ? '' : m).trim().slice(0, 60);
     if (!x) x = PROVIDERS[prov] ? PROVIDERS[prov].def : DEF.model;
@@ -237,9 +243,10 @@ function cleanQ(s, client) {
 }
 
 // ===== الطلب (fetch + مهلة) =====
-async function post(url, body, key) {
+async function post(url, body, key, ms) {
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = ctl ? setTimeout(() => { try { ctl.abort(); } catch { } }, TIMEOUT_MS) : null;
+    const wait = Math.max(5000, Number(ms) || TIMEOUT_MS);
+    const timer = ctl ? setTimeout(() => { try { ctl.abort(); } catch { } }, wait) : null;
     try {
         const headers = { 'content-type': 'application/json' };
         if (key) headers.authorization = 'Bearer ' + key;
@@ -299,14 +306,19 @@ async function askGemini(cfg, key, q, hist) {
     }));
     contents.push({ role: 'user', parts: [{ text: q }] });
 
-    // نجرّب الموديل المختار، ولو انسحب/مشغول ننزل للموديلات التالية تلقائياً
-    const chain = uniq([cfg.model].concat(PROVIDERS.gemini.models)).filter(Boolean);
+    // نجرّب الموديل المختار، ولو انسحب/مشغول/بطيء ننزل للموديلات التالية تلقائياً
+    const chain = uniq([cfg.model].concat(PROVIDERS.gemini.models)).filter(Boolean).slice(0, MAX_TRY);
+    const t0 = Date.now();
     let last = null;
+    let quota = false;     // 429 = المفتاح وصل حده
+    let slow = false;      // موديل تعلّق
     for (const model of chain) {
+        if (Date.now() - t0 > TRY_BUDGET_MS) break;
+        const left = Math.max(6000, TRY_BUDGET_MS - (Date.now() - t0));
         const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
             + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
         try {
-            const data = await post(url, geminiBody(cfg, model, contents));
+            const data = await post(url, geminiBody(cfg, model, contents), null, Math.min(TIMEOUT_MS, left));
             const cand = (data && data.candidates && data.candidates[0]) || null;
             const parts = cand && cand.content && cand.content.parts;
             const out = (Array.isArray(parts) ? parts.map(p => (p && p.text) || '').join('') : '').trim();
@@ -317,11 +329,17 @@ async function askGemini(cfg, key, q, hist) {
         } catch (e) {
             last = e;
             const s = e && e.status;
-            const keyBad = /🔑/.test(String((e && e.message) || ''));
-            if (!keyBad && (s === 400 || s === 404 || s === 429 || s === 503)) continue;
+            const msg = String((e && e.message) || '');
+            // ⏱️ موديل بطيء → نكمّل على غيره بدل ما نوقف بالخطأ
+            if (/⏱️/.test(msg) || (e && e.name === 'AbortError')) { slow = true; continue; }
+            if (s === 429) { quota = true; continue; }         // حده اليومي على هذا الموديل → جرّب غيره
+            if (/🔑/.test(msg)) throw e;                        // المفتاح نفسه غلط → ما ينفع نعيد
+            if (s === 400 || s === 404 || s === 503) continue;   // موديل منسحب/مشغول → اللي بعده
             throw e;
         }
     }
+    if (quota) throw new Error('⏳ المفتاح وصل حده اليومي من Gemini (429) — انتظر شوي أو سوّ مفتاح جديد من AI Studio. جرّب موديل 3.1-flash-lite (الأخف والأسرع).');
+    if (slow) throw new Error('⏱️ كل موديلات Gemini تأخرت هذي المرة — أعد المحاولة بعد شوي (أو اختر موديل 3.1-flash-lite من صفحة الذكاء الاصطناعي).');
     throw last || new Error('🤖 ما رجع رد من Gemini — جرّب بعد شوي.');
 }
 
