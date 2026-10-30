@@ -54,7 +54,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-29.3';
+const BUILD = '2026-10-30.1';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -1251,6 +1251,18 @@ m.appendChild(card('حالة السيرفر',el('div',{},[
  el('div',{class:'row'},[el('span',{class:'tag '+(c.enabled?'on':'off'),text:c.enabled?'✅ الحماية شغالة':'⛔ الحماية مطفية'}),el('span',{class:'tag '+(d.locked?'off':'on'),text:d.locked?'🔒 السيرفر مقفول':'🔓 السيرفر مفتوح'}),el('span',{class:'tag',text:'العقوبة: '+(c.mode==='ban'?'حظر':c.mode==='kick'?'طرد':'سحب الرتب')})]),
  el('div',{class:'mut',style:'margin-top:8px',text:miss.length?('⚠️ البوت ناقصه صلاحيات: '+miss.join('، ')+' — لازم تعطيه إياها من صلاحيات رتبته.'):'✅ البوت عنده كل الصلاحيات المطلوبة (حظر، إدارة رتب، إدارة رومات، سجل التدقيق).'}),
  el('div',{class:'mut',text:'ترتيب رتبة البوت: '+cap.highest+' من '+cap.total+' — لازم رتبته فوق رتبة أي مخرب عشان يقدر يعاقبه.'})
+])));
+// ١-ب) تشخيص: وين يروح التنبيه بالضبط (هذا اللي يجاوب «ليش ما يجيني شي»)
+var dg=d.diag||{};
+var chTxt=dg.channel?('#'+dg.channel.name+(dg.channel.auto?' — تلقائي (خانة الروم فوق فاضية)':'')):'⛔ ما فيه روم تنبيهات — سوّ روم اسمه «تنبيهات» أو اختَره فوق';
+var tg=(dg.targets||[]);
+var tgTxt=tg.length?tg.map(function(t){return t.id+(t.inGuild?' ✅ بالسيرفر':' ⚠️ مو بالسيرفر (ديسكورد يرفض الخاص له)')}).join(' · '):'⚠️ ما فيه أحد يستقبل الخاص';
+var pv=dg.perms||{};
+m.appendChild(card('وين يروح التنبيه؟ 🧭',el('div',{},[
+ el('div',{class:'row'},[el('span',{class:'tag '+(dg.channel?'on':'off'),text:'روم التنبيهات'}),el('span',{class:'mut',text:chTxt})]),
+ el('div',{class:'row',style:'margin-top:6px'},[el('span',{class:'tag '+(dg.dm?'on':'off'),text:'الخاص'}),el('span',{class:'mut',text:dg.dm?('يُرسل إلى: '+tgTxt):'مطفّي (شغّله من الإعدادات تحت)'})]),
+ el('div',{class:'mut',style:'margin-top:8px',text:pv.audit?'✅ البوت يقرأ سجل التدقيق — يعرف مين المخرب بالضبط.':'⚠️ البوت ما يقرأ سجل التدقيق — التنبيه بيجي «مخرب غير معروف» وما ينعاقب. أعطه صلاحية «عرض سجل التدقيق / View Audit Log».'}),
+ el('div',{class:'mut',text:'🔔 أي حركة من حساب مستثنى (ارثر · إيدا · الملكي · صاحب السيرفر) صارت تجيك تنبيه ولا ينعاقب — جرّب احذف روم وشوف.'})
 ])));
 m.appendChild(row([
  el('button',{class:'b2',text:'🔒 قفل السيرفر فوراً',on:{click:function(){if(!confirm('نقفل كل الرومات فوراً؟ ما يقدر أحد يكتب غير الملكيين.'))return;go(api('guard/lock',{on:true,confirm:true}),'انقفل السيرفر 🔒 🛡️','guard')}}}),
@@ -2525,6 +2537,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             roles: [...g.roles.cache.values()].filter(r => r.id !== g.id && !r.managed)
                 .sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name })),
             incidents: guard.incidents(g.id, 40),
+            diag: (function () { try { return guard.diag(g); } catch (e) { return null; } })(),
             caps: {
                 ban: me ? me.permissions.has('BanMembers') : false,
                 kick: me ? me.permissions.has('KickMembers') : false,

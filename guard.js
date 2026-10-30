@@ -184,9 +184,12 @@ function immune(guild, uid, member) {
     if (uid === guild.ownerId) return true;                 // صاحب السيرفر
     if (!cfg.protectOwners) {
         // 🌐 سيرفرنا: ارثر/إيدا/الرتبة الملكية · أي سيرفر ثاني: صاحب السيرفر + اللي أعطاه صلاحية الدخول
+        const raw = String(uid);
+        const ids = [CONFIG && CONFIG.ARTHUR_ID, CONFIG && CONFIG.SPECIAL_USER_ID]
+            .map(x => String(x || '')).filter(Boolean);
+        if (ids.includes(raw) || access.isSuper(uid, CONFIG)) return true;   // ارثر/إيدا دايماً محصّنين
         const m = member || guild.members.cache.get(uid);
         if (m && access.isRoyal(guild, m, CONFIG)) return true;
-        if (!m && access.isSuper(uid, CONFIG)) return true;
     }
     if (cfg.whitelist.users.includes(uid)) return true;
     if (cfg.whitelist.bots.includes(uid)) return true;
@@ -230,7 +233,54 @@ async function actorOf(guild, type, targetId, withinMs) {
 }
 
 // ===== التنبيه المصمم =====
-// ترجع تقريراً بالعربي: وش صار بالضبط (صورة/نص · الروم · الخاص) — تستخدمه صفحة «تجربة التنبيه»
+// روم التنبيهات: المحدد من اللوحة → وإلا ندوّر روم اسمه تنبيهات/حماية/سجل → وإلا روم السجل العام
+function alertChannelOf(guild, cfg) {
+    const ok = (c) => !!c && typeof c.isTextBased === 'function' && c.isTextBased() && !(typeof c.isThread === 'function' && c.isThread());
+    const pick = (id) => {
+        const c = id && guild.channels.cache.get(String(id));
+        return ok(c) ? c : null;
+    };
+    const fixed = pick(cfg && cfg.alertChannelId);
+    if (fixed) return { ch: fixed, auto: false };
+    const log = pick(CONFIG && CONFIG.LOG_CHANNEL_ID);
+    if (log) return { ch: log, auto: true };
+    const pat = /تنبيه|حماي|alert|guard|سجل|log|أمن|امن/i;
+    const list = [...guild.channels.cache.values()].filter(ok);
+    const byName = list.find(c => pat.test(String(c.name || '')));
+    if (byName) return { ch: byName, auto: true };
+    const sys = guild.systemChannel;
+    if (ok(sys)) return { ch: sys, auto: true };
+    return { ch: null, auto: true };
+}
+
+// 🔔 حركة من حساب مستثنى (ملكي/صاحب السيرفر/بالقائمة) — ننبّه ولا نعاقب
+//    (قبل كذا كانت تنبلع بصمت فيظن إن الحماية ما تشتغل)
+const noticeCache = new Map();
+async function exemptNote(guild, uid, type, detail) {
+    if (!guild || !uid) return;
+    const cfg = get(guild.id);
+    if (!cfg.enabled) return;
+    const k = `${guild.id}:${uid}:${type}`;
+    const now = Date.now();
+    if (now - (noticeCache.get(k) || 0) < 60_000) return;   // مرة كل دقيقة لنفس الشخص/النوع
+    noticeCache.set(k, now);
+    const member = guild.members.cache.get(uid) || await guild.members.fetch(uid).catch(() => null);
+    const name = member ? member.displayName : uid;
+    await notify(guild, {
+        title: 'حركة من حساب مستثنى 🔔',
+        lines: [
+            `**النوع:** ${reasonOf(type, detail)}`,
+            `**الحساب:** <@${uid}> (\`${uid}\`) — ${name}`,
+            '**العقوبة:** ما عاقبناه — مستثنى (ملكي · صاحب السيرفر · بالقائمة)',
+            '**ملاحظة:** لو هذا تخريب حقيقي، فعّل «حماية المسؤولين» من صفحة الحماية 🛡️'
+        ],
+        culprit: uid, culpritName: name,
+        avatarURL: member ? member.displayAvatarURL({ extension: 'png', size: 256 }) : null,
+        stats: [{ label: 'الحالة', value: 'مستثنى' }, { label: 'النوع', value: type }],
+        tone: HARD.includes(type) ? 'bad' : 'good'
+    });
+}
+
 async function notify(guild, { title, lines, culprit, culpritName, avatarURL, stats, tone = 'bad' }) {
     const cfg = get(guild.id);
     const rep = { art: false, channel: '', dm: '', channelId: cfg.alertChannelId || '', dmOn: !!cfg.alertDM };
@@ -263,14 +313,19 @@ async function notify(guild, { title, lines, culprit, culpritName, avatarURL, st
         const why = art.available() ? 'فشل رسم الصورة (رجّعنا نص)' : 'محرك الصور مو متاح (نص فقط)';
         rep.art = false; rep.artNote = why;
     }
+    let target = null;
     if (cfg.alertChannelId) {
         try {
-            const ch = guild.channels.cache.get(cfg.alertChannelId) || await guild.channels.fetch(cfg.alertChannelId).catch(() => null);
-            if (!ch) rep.channel = '⚠️ ما لقيت الروم (آيديه غلط أو انحذف)';
-            else if (!ch.isTextBased()) rep.channel = '⚠️ المحدد مو روم كتابي';
-            else { await ch.send(payload); rep.channel = '✅ أُرسل إلى #' + ch.name; }
-        } catch (err) { rep.channel = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالروم', err); }
-    } else rep.channel = '⚠️ ما اخترت روم تنبيهات (خانة فاضية)';
+            target = guild.channels.cache.get(cfg.alertChannelId) || await guild.channels.fetch(cfg.alertChannelId).catch(() => null);
+        } catch { target = null; }
+        if (target && !(typeof target.isTextBased === 'function' && target.isTextBased())) target = null;
+    }
+    const usedAuto = !target;
+    if (!target) { const f = alertChannelOf(guild, cfg); target = f.ch; }
+    if (target) {
+        try { await target.send(payload); rep.channel = '✅ أُرسل إلى #' + target.name + (usedAuto ? ' (تلقائي)' : ''); }
+        catch (err) { rep.channel = '⛔ فشل: ' + (err && err.message || err); logErr('إرسال التنبيه بالروم', err); }
+    } else rep.channel = '⚠️ ما فيه روم تنبيهات — سوّ روم اسمه «تنبيهات» أو حدّده من الصفحة';
     if (cfg.alertDM) {
         // ديسكورد يرفض الخاص لو البوت ما يشارك الحساب أي سيرفر → نرسل لكل مسؤول «موجود فعلاً بالسيرفر»
         const nameOf = (id) => id === CONFIG.ARTHUR_ID ? 'ارثر' : id === CONFIG.SPECIAL_USER_ID ? 'إيدا'
@@ -491,10 +546,11 @@ async function lockdown(guild, on, opt = {}) {
 
 // ===== قلب النظام: حدث مشتبه فيه =====
 async function threat(guild, { type, uid, detail, count, hard, revert }) {
-    if (!guild || !uid) return null;
+    if (!guild) return null;
     const cfg = get(guild.id);
-    const member = guild.members.cache.get(uid) || await guild.members.fetch(uid).catch(() => null);
-    const name = member ? member.displayName : uid;
+    const known = !!uid;
+    const member = known ? (guild.members.cache.get(uid) || await guild.members.fetch(uid).catch(() => null)) : null;
+    const name = member ? member.displayName : (known ? uid : 'غير معروف');
 
     const undone = [];
     if (cfg.revert && revert) {
@@ -502,8 +558,9 @@ async function threat(guild, { type, uid, detail, count, hard, revert }) {
     }
     // العقوبة: أنواع التخريب الجماعي دايماً، وغيرها لو «عاقب على كل محاولة» أو حقل hard
     let action = 'تنبيه فقط';
-    const wantPunish = hard || cfg.strictAll;
+    const wantPunish = known && (hard || cfg.strictAll);
     if (wantPunish) action = await punish(guild, uid, type, detail);
+    else if (!known) action = 'تنبيه فقط — ما عرفنا الفاعل (ناقص صلاحية «سجل التدقيق»؟)';
 
     const rec = {
         at: Date.now(), type, uid, name,
@@ -514,7 +571,7 @@ async function threat(guild, { type, uid, detail, count, hard, revert }) {
 
     const lines = [
         `**النوع:** ${reasonOf(type, detail)}`,
-        `**المخرب:** <@${uid}> (\`${uid}\`) — ${name}`,
+        known ? `**المخرب:** <@${uid}> (\`${uid}\`) — ${name}` : '**المخرب:** ❓ غير معروف — تأكد إن البوت عنده صلاحية **«سجل التدقيق / View Audit Log»**',
         count ? `**خلال النافذة:** ${count} حركة` : '',
         undone.filter(Boolean).length ? `**رجعنا:** ${undone.filter(Boolean).join(' · ')}` : '',
         `**العقوبة:** ${action}`
@@ -533,12 +590,37 @@ async function threat(guild, { type, uid, detail, count, hard, revert }) {
     return action;
 }
 
+// ❓ حركة مشبوهة وما قدرنا نعرف الفاعل (ناقص صلاحية سجل التدقيق) — ننبّه ولا نرجّع شي
+const unknownCache = new Map();
+async function unknownNote(guild, type, detail) {
+    if (!guild) return;
+    const cfg = get(guild.id);
+    if (!cfg.enabled) return;
+    const k = `${guild.id}:${type}`;
+    const now = Date.now();
+    if (now - (unknownCache.get(k) || 0) < 5000) return;   // ما نزعج: مرة كل ٥ ثواني لكل نوع
+    unknownCache.set(k, now);
+    await notify(guild, {
+        title: 'حركة مشبوهة — ما عرفنا الفاعل ❓',
+        lines: [
+            `**النوع:** ${reasonOf(type, detail)}`,
+            '**الفاعل:** غير معروف — البوت ما قدر يقرأ سجل التدقيق',
+            '**العقوبة:** تنبيه فقط (ما رجّعنا شي عشان ما نخرب شي حلال)',
+            '**الحل:** أعطِ رتبة البوت صلاحية **«عرض سجل التدقيق / View Audit Log»**'
+        ],
+        culprit: null, culpritName: 'غير معروف',
+        stats: [{ label: 'النوع', value: type }]
+    });
+}
+
 // ينفّذ الفحص الكامل لحدث واحد
 async function handleAction(guild, { type, uid, targetId, detail, revert }) {
-    if (!guild || !uid) return null;
+    if (!guild) return null;
     const cfg = get(guild.id);
     if (!cfg.enabled) return null;
-    if (immune(guild, uid)) return null;
+    // ❓ مجهول الفاعل: ننبّه بس (الإرجاع الأعمى ممكن يخرب شغل حلال)
+    if (!uid) { await unknownNote(guild, type, detail); return null; }
+    if (immune(guild, uid)) { await exemptNote(guild, uid, type, detail); return null; }
     const limit = cfg.limits[type] || 3;
     const win = cfg.windowSec * 1000;
     const count = hit(guild.id, uid, type, win);
@@ -589,7 +671,7 @@ function init(client, CONFIG_) {
     client.on('channelDelete', safe(async (ch) => {
         if (!ch.guild) return;
         const uid = await actorOf(ch.guild, AuditLogEvent.ChannelDelete, ch.id);
-        if (!uid || immune(ch.guild, uid)) return;
+        if (uid && immune(ch.guild, uid)) { exemptNote(ch.guild, uid, 'channelDelete', '#' + ch.name).catch(() => { }); return; }
         await handleAction(ch.guild, {
             type: 'channelDelete', uid, targetId: ch.id, detail: `#${ch.name}`,
             revert: async () => { const r = await restoreChannel(ch.guild, ch); return r ? [`رجعنا الروم #${ch.name}`] : []; }
@@ -600,7 +682,7 @@ function init(client, CONFIG_) {
     client.on('channelCreate', safe(async (ch) => {
         if (!ch.guild) return;
         const uid = await actorOf(ch.guild, AuditLogEvent.ChannelCreate, ch.id);
-        if (!uid || immune(ch.guild, uid)) return;
+        if (uid && immune(ch.guild, uid)) { exemptNote(ch.guild, uid, 'channelCreate', '#' + ch.name).catch(() => { }); return; }
         await handleAction(ch.guild, {
             type: 'channelCreate', uid, targetId: ch.id, detail: `#${ch.name}`,
             revert: async () => { try { await ch.delete('🛡️ درع نوفا: روم مسوي بالجملة'); return ['حذفنا الروم المسوي']; } catch { return []; } }
@@ -612,7 +694,7 @@ function init(client, CONFIG_) {
         const guild = role.guild;
         if (!guild) return;
         const uid = await actorOf(guild, AuditLogEvent.RoleDelete, role.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'roleDelete', role.name).catch(() => { }); return; }
         await handleAction(guild, {
             type: 'roleDelete', uid, targetId: role.id, detail: role.name,
             revert: async () => { const r = await restoreRole(guild, role); return r ? [`رجعنا الرتبة ${role.name}`] : []; }
@@ -624,7 +706,7 @@ function init(client, CONFIG_) {
         const guild = role.guild;
         if (!guild) return;
         const uid = await actorOf(guild, AuditLogEvent.RoleCreate, role.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'roleCreate', role.name).catch(() => { }); return; }
         if (hasSevere(role.permissions.bitfield)) {
             await threat(guild, {
                 type: 'roleCreate', uid, count: 1, hard: true, detail: `رتبة خطيرة: ${role.name}`,
@@ -647,7 +729,7 @@ function init(client, CONFIG_) {
         if (before === after) return;
         const gained = BigInt(after) & ~BigInt(before);
         const uid = await actorOf(guild, AuditLogEvent.RoleUpdate, newRole.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'roleUpdate', newRole.name).catch(() => { }); return; }
         const snap = snapOf(guild);
 
         // أي إعطاء لصلاحية خطيرة = تخريب مؤكد (يُرجَّع فوراً ولو حركة وحدة)
@@ -676,7 +758,7 @@ function init(client, CONFIG_) {
         const guild = ban.guild;
         if (!guild) return;
         const uid = await actorOf(guild, AuditLogEvent.MemberBanAdd, ban.user.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'ban', 'عضو ' + ban.user.username).catch(() => { }); return; }
         await handleAction(guild, {
             type: 'ban', uid, targetId: ban.user.id, detail: `حظر ${ban.user.username}`,
             revert: async () => { const n = await unbanBy(guild, uid, AuditLogEvent.MemberBanAdd, get(guild.id).windowSec * 1000 + 5000); return n ? [`فكينا الحظر عن ${n} عضو`] : []; }
@@ -688,7 +770,7 @@ function init(client, CONFIG_) {
         const guild = member.guild;
         if (!guild) return;
         const uid = await actorOf(guild, AuditLogEvent.MemberKick, member.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'kick', 'عضو ' + member.user.username).catch(() => { }); return; }
         await handleAction(guild, { type: 'kick', uid, targetId: member.id, detail: `طرد ${member.user.username}`, revert: null });
     }, 'طرد عضو'));
 
@@ -701,7 +783,7 @@ function init(client, CONFIG_) {
         const bad = added.filter(r => hasSevere(r.permissions.bitfield));
         if (!bad.size) return;
         const uid = await actorOf(guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'roleGrant', newMember.user.username).catch(() => { }); return; }
         await threat(guild, {
             type: 'roleGrant', uid, count: 1, hard: false,
             detail: `أعطى ${bad.map(r => r.name).join('، ')} لـ ${newMember.user.username}`,
@@ -741,7 +823,7 @@ function init(client, CONFIG_) {
         const guild = emoji.guild;
         if (!guild) return;
         const uid = await actorOf(guild, AuditLogEvent.EmojiDelete, emoji.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'emoji', emoji.name).catch(() => { }); return; }
         await handleAction(guild, {
             type: 'emoji', uid, targetId: emoji.id, detail: emoji.name,
             revert: async () => { const r = await restoreEmoji(guild, emoji); return r ? [`رجعنا الإيموجي ${emoji.name}`] : []; }
@@ -768,7 +850,7 @@ function init(client, CONFIG_) {
         const aA = after ? after.allow.bitfield : 0n, aD = after ? after.deny.bitfield : 0n;
         if (bA === aA && bD === aD) return;
         const uid = await actorOf(guild, AuditLogEvent.ChannelOverwriteUpdate, newCh.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'overwrite', '#' + newCh.name).catch(() => { }); return; }
         const snap = snapOf(guild);
         await handleAction(guild, {
             type: 'overwrite', uid, targetId: newCh.id, detail: `#${newCh.name}`,
@@ -780,7 +862,7 @@ function init(client, CONFIG_) {
     client.on('guildUpdate', safe(async (oldGuild, newGuild) => {
         const guild = newGuild;
         const uid = await actorOf(guild, AuditLogEvent.GuildUpdate, guild.id);
-        if (!uid || immune(guild, uid)) return;
+        if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'guildUpdate', 'اسم/أيقونة السيرفر').catch(() => { }); return; }
         const changed = oldGuild.name !== newGuild.name || oldGuild.icon !== newGuild.icon;
         if (!changed) return;
         await threat(guild, {
@@ -906,6 +988,16 @@ function init(client, CONFIG_) {
     // لقطة أولى + تحديث دوري (نقطة رجوع لصلاحيات الرتب والرومات) — لكل السيرفرات
     client.on('clientReady', safe(async () => {
         for (const g of client.guilds.cache.values()) if (access.isApproved(g.id, CONFIG)) snapshot(g);
+        // فحص ذاتي: وين يروح التنبيه بالضبط (يطلع بالكونسول عشان تعرف المشكلة فوراً)
+        for (const g of client.guilds.cache.values()) {
+            if (!access.isApproved(g.id, CONFIG)) continue;
+            try {
+                const d = diag(g);
+                const ch = d.channel ? '#' + d.channel.name + (d.channel.auto ? ' (تلقائي)' : '') : '⛔ ما فيه روم تنبيهات';
+                const dm = d.dm ? `${d.targets.filter(t => t.inGuild).length}/${d.targets.length} مسؤول` : 'مطفي';
+                console.log(`🛡️ ${g.name}: التنبيه ← ${ch} · الخاص ${dm} · سجل التدقيق ${d.perms.audit ? '✅' : '❌'}`);
+            } catch { /* تجاهل */ }
+        }
     }, 'اللقطة'));
     setInterval(() => {
         for (const g of client.guilds.cache.values()) if (g.available && access.isApproved(g.id, CONFIG)) snapshot(g);
@@ -1006,7 +1098,32 @@ async function handle(i, ctx) {
     }
 }
 
+// تشخيص سريع: وين يروح التنبيه بالضبط؟ ومنو بيوصله بالخاص؟ ووش ناقص البوت؟
+function diag(guild) {
+    const cfg = get(guild.id);
+    const f = alertChannelOf(guild, cfg);
+    const me = guild.members.me;
+    const has = (k) => !!(me && me.permissions.has(P[k]));
+    let targets = [];
+    try { targets = access.royalIds(guild, CONFIG) || []; } catch { targets = []; }
+    for (const id of (cfg.alertUsers || [])) if (!targets.includes(id)) targets.push(id);
+    return {
+        enabled: !!cfg.enabled,
+        mode: cfg.mode,
+        channel: f.ch ? { id: f.ch.id, name: f.ch.name, auto: !!f.auto } : null,
+        dm: !!cfg.alertDM,
+        targets: targets.map(id => ({ id, inGuild: !!guild.members.cache.get(id) })),
+        perms: {
+            audit: has('ViewAuditLog'), ban: has('BanMembers'), kick: has('KickMembers'),
+            roles: has('ManageRoles'), channels: has('ManageChannels'),
+            webhooks: has('ManageWebhooks'), timeout: has('ModerateMembers')
+        },
+        highest: me ? me.roles.highest.position : 0,
+        total: guild.roles.cache.size
+    };
+}
+
 module.exports = {
-    init, get, set, reset, commands, handle,
+    init, get, set, reset, commands, handle, diag,
     incidents, clearIncidents, lockdown, isLocked, snapshot, notify, immune, hit, hasSevere, resetCache, SEVERE
 };
