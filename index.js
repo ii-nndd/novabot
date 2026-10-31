@@ -44,9 +44,11 @@ const cmdaccess = require('./cmdaccess');
 //    يعني تقدر تشغّل البوت على أي سيرفر جديد بدون ما تلمس الكود: عدّل .env بس.
 const CONFIG = {
     GUILD_ID: process.env.GUILD_ID || '1556028798183546900',
-    VOICE_CHANNEL_ID: process.env.VOICE_CHANNEL_ID || '1556028799865327729',
+    // ⚠️ فاضي = ما يدخل فويس (ما نرجع لآيدي روم سيرفر ثاني — كان يسبب «Missing Access» بنسخ التسليم)
+    VOICE_CHANNEL_ID: process.env.VOICE_CHANNEL_ID || '',
     ARTHUR_ID: process.env.ARTHUR_ID || '848996426918002731',
-    ROYAL_ROLE_ID: process.env.ROYAL_ROLE_ID || '1558453195976740975',
+    // ⚠️ فاضي = ما فيه رتبة ملكي (ما نرجع لرتبة سيرفر ثاني)
+    ROYAL_ROLE_ID: process.env.ROYAL_ROLE_ID || '',
     SPECIAL_USER_ID: process.env.SPECIAL_USER_ID || '1542941271205875812',
     // اختياري: آي دي روم الكتابة اللي يرسل فيه ترحيب دخول ارثر وإيدا (اتركه فاضي لتعطيله)
     WELCOME_TEXT_CHANNEL_ID: process.env.WELCOME_TEXT_CHANNEL_ID || '',
@@ -59,9 +61,9 @@ const CONFIG = {
         '1550879705115398156': 'nabd'    // نبض ارثر / حبيبة ارثر - دلع وحنية خاصة
     },
     // رتبة "بدون احترام": اللي عندهم هالرتبة بس يرجع لهم أسلوب البوت الفظ القديم. الكل غيرهم (حتى بدون رتبة) يعامله البوت باحترام
-    DISRESPECT_ROLE_ID: process.env.DISRESPECT_ROLE_ID || '1559161253249949776',
+    DISRESPECT_ROLE_ID: process.env.DISRESPECT_ROLE_ID || '',
     // 👑 ملكية بالسر (بدون صلاحيات صاحب البوت ولا ظهور): الافتراضي إيفا
-    SECRET_ROYAL_IDS: process.env.SECRET_ROYAL_IDS || '1550879705115398156'
+    SECRET_ROYAL_IDS: process.env.SECRET_ROYAL_IDS || ''
 };
 
 // 💘 أزواج «الحب» الثابتة — نسبتها ما تنزل ولا تتغير أبداً مهما صار.
