@@ -60,6 +60,7 @@ function copyTree(src, dst, report) {
             copyTree(s, d, report);
         } else {
             if (SKIP_FILES.has(ent.name)) continue;
+            if (ent.name.startsWith('.env')) continue;   // .env / .env.القديم.txt / .env.local — كلها أسرار
             if (SKIP_EXT.has(path.extname(ent.name).toLowerCase())) continue;
             fs.copyFileSync(s, d);
             report.files++;
