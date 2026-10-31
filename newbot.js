@@ -27,7 +27,11 @@ const DESKTOP = path.join(os.homedir(), 'Desktop');
 // ما ننسخه: مجلدات/ملفات التشغيل والأسرار
 const SKIP_DIRS = new Set(['node_modules', '.git', 'data', 'tunnels', '.vscode', '.idea', 'logs']);
 const SKIP_EXT = new Set(['.zip', '.exe', '.winmd', '.log', '.pid']);
-const SKIP_FILES = new Set(['.env', '.env.local', 'nova-panel.png.bak']);
+const SKIP_FILES = new Set([
+    '.env', '.env.local', '.env.example', '.gitignore', 'nova-panel.png.bak',
+    // توثيق داخلي فيه آيديات وسوالف سيرفرنا — ما ينتقل لصاحب سيرفر ثاني
+    'AGENTS.md', 'HANDOFF.md', 'README.md', 'render.yaml', 'makebot.js'
+]);
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
 // طابور أسطر يشتغل صح سواء كتبت يدوياً أو دخلت الأسطر من ملف/أنبوب
@@ -234,6 +238,8 @@ function startHereText(o) {
     const tskey = await ask('TS_AUTHKEY (نفق Tailscale للرابط الثابت — اختياري)');
     const tshost = await ask('TS_HOSTNAME (اسم الرابط الثابت، مثال: nova-bot2)', `${slug}-bot`);
     const aikey = await ask('AI_KEY (مفتاح Gemini للذكاء الاصطناعي وصوت العبد — اختياري)');
+    const brand = await ask('تبدّل كلمة «نوفا» باسم السيرفر باللوحة والردود؟ (y = نعم / n = لا)', 'y');
+    const display = brand && /^y/i.test(brand) ? await ask('اسم السيرفر اللي يظهر باللوحة (عربي)', name) : name;
 
     if (guild && !isId(guild)) console.log('⚠️ تنبيه: GUILD_ID يبدو مو آيدي صحيح (لازم أرقام فقط).');
     if (owner && !isId(owner)) console.log('⚠️ تنبيه: ARTHUR_ID يبدو مو آيدي صحيح.');
@@ -251,6 +257,20 @@ function startHereText(o) {
     console.log('\n📦 جاري نسخ ملفات البوت…');
     const report = { files: 0 };
     copyTree(ROOT, outDir, report);
+
+    // 🎨 الهوية: «نوفا» ← اسم السيرفر (نصوص ظاهرة بس — ما نلمس أي كود أو متغير)
+    if (brand && /^y/i.test(brand) && display && display !== 'نوفا') {
+        const targets = ['dashboard.js', 'index.js', 'hub.js', 'welcome.js', 'guard.js', 'admin.js', 'extra.js', 'ai.js', 'tts.js'];
+        let changed = 0;
+        for (const f of targets) {
+            const p = path.join(outDir, f);
+            if (!fs.existsSync(p)) continue;
+            const before = fs.readFileSync(p, 'utf8');
+            const after = before.split('نوفا').join(display);
+            if (after !== before) { fs.writeFileSync(p, after, 'utf8'); changed++; }
+        }
+        console.log(`🎨 بدلنا اسم «نوفا» بـ«${display}» في ${changed} ملف (شكل فقط).`);
+    }
 
     const o = {
         name, slug, guild, owner, helper, royalRole, voice,

@@ -184,12 +184,9 @@ function immune(guild, uid, member) {
     if (uid === guild.ownerId) return true;                 // صاحب السيرفر
     if (!cfg.protectOwners) {
         // 🌐 سيرفرنا: ارثر/إيدا/الرتبة الملكية · أي سيرفر ثاني: صاحب السيرفر + اللي أعطاه صلاحية الدخول
-        const raw = String(uid);
-        const ids = [CONFIG && CONFIG.ARTHUR_ID, CONFIG && CONFIG.SPECIAL_USER_ID]
-            .map(x => String(x || '')).filter(Boolean);
-        if (ids.includes(raw) || access.isSuper(uid, CONFIG)) return true;   // ارثر/إيدا دايماً محصّنين
         const m = member || guild.members.cache.get(uid);
         if (m && access.isRoyal(guild, m, CONFIG)) return true;
+        if (!m && access.isSuper(uid, CONFIG)) return true;
     }
     if (cfg.whitelist.users.includes(uid)) return true;
     if (cfg.whitelist.bots.includes(uid)) return true;
@@ -235,27 +232,29 @@ async function actorOf(guild, type, targetId, withinMs) {
 // ===== التنبيه المصمم =====
 // روم التنبيهات: المحدد من اللوحة → وإلا ندوّر روم اسمه تنبيهات/حماية/سجل → وإلا روم السجل العام
 function alertChannelOf(guild, cfg) {
-    const ok = (c) => !!c && typeof c.isTextBased === 'function' && c.isTextBased() && !(typeof c.isThread === 'function' && c.isThread());
     const pick = (id) => {
         const c = id && guild.channels.cache.get(String(id));
-        return ok(c) ? c : null;
+        return c && typeof c.isTextBased === 'function' && c.isTextBased()
+            && !(typeof c.isThread === 'function' && c.isThread()) ? c : null;
     };
     const fixed = pick(cfg && cfg.alertChannelId);
     if (fixed) return { ch: fixed, auto: false };
     const log = pick(CONFIG && CONFIG.LOG_CHANNEL_ID);
     if (log) return { ch: log, auto: true };
     const pat = /تنبيه|حماي|alert|guard|سجل|log|أمن|امن/i;
-    const list = [...guild.channels.cache.values()].filter(ok);
+    const list = [...guild.channels.cache.values()]
+        .filter(c => typeof c.isTextBased === 'function' && c.isTextBased() && !(typeof c.isThread === 'function' && c.isThread()));
     const byName = list.find(c => pat.test(String(c.name || '')));
     if (byName) return { ch: byName, auto: true };
     const sys = guild.systemChannel;
-    if (ok(sys)) return { ch: sys, auto: true };
+    if (sys && typeof sys.isTextBased === 'function' && sys.isTextBased()) return { ch: sys, auto: true };
     return { ch: null, auto: true };
 }
 
 // 🔔 حركة من حساب مستثنى (ملكي/صاحب السيرفر/بالقائمة) — ننبّه ولا نعاقب
 //    (قبل كذا كانت تنبلع بصمت فيظن إن الحماية ما تشتغل)
 const noticeCache = new Map();
+const unknownCache = new Map();   // تنبيه «فاعل مجهول»: مرة كل ٢٠ ثانية لكل نوع
 async function exemptNote(guild, uid, type, detail) {
     if (!guild || !uid) return;
     const cfg = get(guild.id);
@@ -590,37 +589,23 @@ async function threat(guild, { type, uid, detail, count, hard, revert }) {
     return action;
 }
 
-// ❓ حركة مشبوهة وما قدرنا نعرف الفاعل (ناقص صلاحية سجل التدقيق) — ننبّه ولا نرجّع شي
-const unknownCache = new Map();
-async function unknownNote(guild, type, detail) {
-    if (!guild) return;
-    const cfg = get(guild.id);
-    if (!cfg.enabled) return;
-    const k = `${guild.id}:${type}`;
-    const now = Date.now();
-    if (now - (unknownCache.get(k) || 0) < 5000) return;   // ما نزعج: مرة كل ٥ ثواني لكل نوع
-    unknownCache.set(k, now);
-    await notify(guild, {
-        title: 'حركة مشبوهة — ما عرفنا الفاعل ❓',
-        lines: [
-            `**النوع:** ${reasonOf(type, detail)}`,
-            '**الفاعل:** غير معروف — البوت ما قدر يقرأ سجل التدقيق',
-            '**العقوبة:** تنبيه فقط (ما رجّعنا شي عشان ما نخرب شي حلال)',
-            '**الحل:** أعطِ رتبة البوت صلاحية **«عرض سجل التدقيق / View Audit Log»**'
-        ],
-        culprit: null, culpritName: 'غير معروف',
-        stats: [{ label: 'النوع', value: type }]
-    });
-}
+// الأنواع اللي نرجّعها حتى لو الفاعل مجهول (ما نضيّع شي على السيرفر)
+const SAFE_REVERT = ['channelDelete', 'roleDelete', 'ban'];
 
 // ينفّذ الفحص الكامل لحدث واحد
 async function handleAction(guild, { type, uid, targetId, detail, revert }) {
     if (!guild) return null;
     const cfg = get(guild.id);
     if (!cfg.enabled) return null;
-    // ❓ مجهول الفاعل: ننبّه بس (الإرجاع الأعمى ممكن يخرب شغل حلال)
-    if (!uid) { await unknownNote(guild, type, detail); return null; }
-    if (immune(guild, uid)) { await exemptNote(guild, uid, type, detail); return null; }
+    if (uid && immune(guild, uid)) { await exemptNote(guild, uid, type, detail); return null; }
+    // الفاعل مجهول (ناقص «عرض سجل التدقيق») = ننبّه بدل ما نسكت — بس نرجّع الأنواع الآمنة فقط
+    if (!uid) {
+        const k = guild.id + ':' + type;
+        const now = Date.now();
+        if (now - (unknownCache.get(k) || 0) < 20_000) return null;   // ما نزعج: تنبيه واحد كل ٢٠ ثانية لكل نوع
+        unknownCache.set(k, now);
+        return threat(guild, { type, uid: '', detail, count: 1, hard: false, revert: SAFE_REVERT.includes(type) ? revert : null });
+    }
     const limit = cfg.limits[type] || 3;
     const win = cfg.windowSec * 1000;
     const count = hit(guild.id, uid, type, win);
@@ -988,22 +973,24 @@ function init(client, CONFIG_) {
     // لقطة أولى + تحديث دوري (نقطة رجوع لصلاحيات الرتب والرومات) — لكل السيرفرات
     client.on('clientReady', safe(async () => {
         for (const g of client.guilds.cache.values()) if (access.isApproved(g.id, CONFIG)) snapshot(g);
-        // فحص ذاتي: وين يروح التنبيه بالضبط (يطلع بالكونسول عشان تعرف المشكلة فوراً)
-        for (const g of client.guilds.cache.values()) {
-            if (!access.isApproved(g.id, CONFIG)) continue;
-            try {
-                const d = diag(g);
-                const ch = d.channel ? '#' + d.channel.name + (d.channel.auto ? ' (تلقائي)' : '') : '⛔ ما فيه روم تنبيهات';
-                const dm = d.dm ? `${d.targets.filter(t => t.inGuild).length}/${d.targets.length} مسؤول` : 'مطفي';
-                console.log(`🛡️ ${g.name}: التنبيه ← ${ch} · الخاص ${dm} · سجل التدقيق ${d.perms.audit ? '✅' : '❌'}`);
-            } catch { /* تجاهل */ }
-        }
     }, 'اللقطة'));
     setInterval(() => {
         for (const g of client.guilds.cache.values()) if (g.available && access.isApproved(g.id, CONFIG)) snapshot(g);
     }, 10 * 60_000).unref?.();
 
     console.log('🛡️ درع نوفا شغال (حماية النك والاختراق)');
+    // تشخيص بالإقلاع: وين يروح التنبيه؟ (عشان أي مشكلة تبان بالكونسول فوراً)
+    setTimeout(() => {
+        for (const g of client.guilds.cache.values()) {
+            if (!g.available || !access.isApproved(g.id, CONFIG)) continue;
+            try {
+                const d = diag(g);
+                const ch = d.channel ? ('#' + d.channel.name + (d.channel.auto ? ' (تلقائي)' : '')) : '⛔ ما فيه روم تنبيهات';
+                const dm = d.dm ? (d.targets.filter(t => t.inGuild).length + ' من ' + d.targets.length + ' بالخاص') : 'الخاص مطفّي';
+                console.log(`🛡️ تنبيهات الحماية عندك → ${ch} · ${dm}${d.perms.audit ? '' : ' · ⚠️ ناقص «عرض سجل التدقيق»'}`);
+            } catch { /* تجاهل */ }
+        }
+    }, 6000).unref?.();
 }
 
 const simpleHash = (s) => {
