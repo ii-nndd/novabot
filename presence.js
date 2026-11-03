@@ -18,14 +18,23 @@ const TYPE = { play: 0, stream: 1, listen: 2, watch: 3, compete: 5 };
 const TYPE_AR = { play: 'يلعب', stream: 'يبث', listen: 'يستمع إلى', watch: 'يشاهد', compete: 'ينافس في' };
 const TYPE_EMOJI = { play: '🎮', stream: '🔴', listen: '🎧', watch: '👀', compete: '🏆' };
 
-// 🏷️ اسم الهوية اللي يظهر بحالات البوت (افتراضي: نوفا).
-//    من .env:  BRAND_NAME=𝗖𝗿𝗶𝗺𝘀𝗼𝗻 𝗡𝗢𝗩𝗔
-//    أي كلمة «نوفا» بالحالات المحفوظة تتحول لهذا الاسم تلقائياً (بدون ما تلمس باقي النص).
+// 🏷️ اسم الهوية اللي يظهر بحالات البوت.
+//    الأولوية: ١) الحقل من اللوحة  ٢) BRAND_NAME من .env  ٣) اسم السيرفر نفسه  ٤) «نوفا»
+//    أي كلمة «نوفا» أو «NOVA» بالحالات المحفوظة تتحول لهذا الاسم تلقائياً (باقي النص ما يتغير).
 const BRAND = String(process.env.BRAND_NAME || '').trim().slice(0, 60);
+const brandRx = /نوفا|nova/gi;
 const brandify = (list, brand) => {
     const b = String(brand || '').trim();
-    return b ? list.map(it => ({ ...it, name: String(it.name || '').split('نوفا').join(b) })) : list;
+    return b ? list.map(it => ({ ...it, name: String(it.name || '').replace(brandRx, b) })) : list;
 };
+// اسم الهوية الفعلي: اللي كتبه صاحب السيرفر → وإلا .env → وإلا اسم السيرفر
+function brandOf(gid) {
+    const c = (all()[gid] || {});
+    const given = String(c.brand === undefined || c.brand === null ? BRAND : c.brand).trim();
+    if (given) return given.slice(0, 60);
+    const g = ref.client && ref.client.guilds ? ref.client.guilds.cache.get(String(gid)) : null;
+    return String((g && g.name) || '').trim().slice(0, 60);
+}
 
 const DEF = {
     enabled: true,
@@ -67,7 +76,7 @@ function cleanItems(list) {
 function get(gid) {
     const c = all()[gid] || {};
     const items = cleanItems(c.items);
-    const brand = String(c.brand === undefined || c.brand === null ? BRAND : c.brand).trim().slice(0, 60);
+    const brand = brandOf(gid);
     return {
         ...DEF, ...c,
         brand,
