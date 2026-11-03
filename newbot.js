@@ -107,6 +107,12 @@ TUNNEL=1
 TS_AUTHKEY=${o.tskey}
 TS_HOSTNAME=${o.tshost}
 
+# --- 🤝 الاتحاد: يخلي لوحة بوت واحد تشوف بوتاتك الثانية (اختياري) ---
+# مفتاح طويل خاص بهذا البوت — حطه بنفس المفتاح باللوحة الرئيسية عند «ربط بوت».
+FED_KEY=${o.fedkey}
+# رابط اللوحة الرئيسية (اتركه فاضي = هذا البوت مستقل)
+FED_MASTER=
+
 # --- الذكاء الاصطناعي / صوت العبد (Gemini مجاني) ---
 AI_KEY=${o.aikey}
 
@@ -276,7 +282,8 @@ function startHereText(o) {
     const o = {
         name, slug, guild, owner, helper, royalRole, voice,
         token, clientId, clientSecret, mongo, tskey, tshost, aikey,
-        session: rand(32), db, zip: `${slug}-bot.zip`
+        session: rand(32), db, zip: `${slug}-bot.zip`,
+        fedkey: 'fed_' + rand(24)
     };
 
     fs.writeFileSync(path.join(outDir, '.env'), envText(o), 'utf8');
@@ -299,6 +306,9 @@ function startHereText(o) {
     }
 
     console.log('\n' + '─'.repeat(52));
+    console.log('🤝 مفتاح الاتحاد (FED_KEY) — تحتاجه لو تبي تربطه بلوحة بوت ثاني:');
+    console.log('    ' + o.fedkey);
+    console.log('─'.repeat(52));
     console.log('الخطوات الجاية:');
     console.log('  ١) افتح «ابدأ-هنا.txt» اللي بالمجلد واتبع الخطوات.');
     console.log('  ٢) عبّي .env (التوكن والآيديات) — كل شي مشروح بالملف.');

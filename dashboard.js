@@ -27,6 +27,7 @@ const tts = require('./tts');
 const ai = require('./ai');
 const replies2 = require('./replies2');
 const cmdaccess = require('./cmdaccess');
+const fed = require('./federation');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -54,7 +55,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-11-03.1';
+const BUILD = '2026-11-03.2';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -318,9 +319,9 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['tts','🎙️','صوت العبد'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['tts','🎙️','صوت العبد'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['bots','🤖','البوتات','sup'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
-function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
+function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='sup')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -1618,7 +1619,7 @@ if(!d.guild||!(d.guilds||[]).length){r.appendChild(guildPicker(d));return}
 var logo=el('div',{class:'logo'});logo.innerHTML=NOVA_MARK_SVG+'<span>'+d.guild.name.slice(0,22)+'</span>';
 var sb=el('div',{class:'sb'},[logo].concat(NAV.filter(function(n){return navOk(n,d)}).map(function(n){
   if(n.length===1)return el('div',{class:'navlab',text:n[0].slice(1)});
-  var b=el('button',{class:'nav','data-p':n[0]},[el('span',{class:'ic',text:n[1]}),el('span',{text:n[2]})].concat(n[3]==='super'||n[3]==='root'?[el('span',{style:'margin-inline-start:auto;font-size:11px;opacity:.85',text:'👑'})]:[]));
+  var b=el('button',{class:'nav','data-p':n[0]},[el('span',{class:'ic',text:n[1]}),el('span',{text:n[2]})].concat(n[3]==='super'||n[3]==='root'||n[3]==='sup'?[el('span',{style:'margin-inline-start:auto;font-size:11px;opacity:.85',text:'👑'})]:[]));
   b.addEventListener('click',function(){show(n[0])});return b})).concat([
   el('a',{class:'nav',href:'/auth/logout'},[el('span',{class:'ic',text:'🚪'}),el('span',{text:'خروج ('+d.user.name+')'})])
 ]));
@@ -1638,39 +1639,74 @@ r.appendChild(el('div',{class:'app'},[sb,el('div',{class:'wrap'},[tb,el('div',{c
 show('overview');
 api('ping').then(function(p){pill.className='pill '+(p.bot?'on':'off');pill.innerHTML='';pill.appendChild(el('span',{class:'pdot'}));pill.appendChild(el('span',{text:(p.bot?'البوت متصل ٢٤/٧':'البوت غير جاهز')+' • مدة التشغيل '+p.mins+' دقيقة'}))}).catch(function(){pill.className='pill off';pill.innerHTML='';pill.appendChild(el('span',{class:'pdot'}));pill.appendChild(el('span',{text:'تعذّر فحص الاتصال'}))});
 }).catch(function(e){document.body.textContent=e.message})}
-// ===== 🌐 السيرفرات: البوت مقفول افتراضياً — مين يشتغل ومين لا (فوق الكل فقط) =====
-pages.guilds=function(m){return api('guilds').then(function(d){
- m.appendChild(el('h1',{text:'السيرفرات 🌐'}));
- m.appendChild(el('div',{class:'mut',text:'🔒 البوت مقفول افتراضياً: أي سيرفر جديد يضيف البوت يظل مقفول — ما يرد، ولا تنزل أوامره، ولا تنفتح لوحته — إلا لما تفعّله من هنا. (سيرفرنا مفعّل دايماً.)'}));
+// ===== 🤖 البوتات: ربط بوتات ثانية بنفس اللوحة (فوق الكل فقط) =====
+pages.bots=function(m){return api('bots').then(function(d){
+ m.appendChild(el('h1',{text:'البوتات'}));
+ m.appendChild(el('div',{class:'mut',text:'اربط بوتاتك الثانية بلوحة وحدة: كل بوت يبقى مستقل (توكنه ولوحته وقاعدته) — وهنا تشوف سيرفراته وتفعّلها وتفتح لوحته بضغطة، بلا تسجيل دخول ثاني. تحتاج من كل بوت: رابطه + مفتاح FED_KEY من ملف .env حقه.'}));
+ if(!d.masterKeySet)m.appendChild(card('⚠️ مفتاح الاتحاد مو مضبوط عندنا',el('div',{class:'mut',style:'line-height:1.9',text:'عشان تقدر تربط بوتات بنا، أضف بملف .env حقنا سطر: FED_KEY=<مفتاح طويل> ثم أعد التشغيل. (تقدر تربط بوتات ثانية بدون هالخطوة، بس العكس يحتاجها.)'})));
  var box=el('div',{});
- (d.guilds||[]).forEach(function(g){
-  var on=!!g.approved;
-  var btn=el('button',{class:'btn '+(on?'dn':''),text:on?'🔒 اقفل':'🔓 فعّل'});
-  btn.addEventListener('click',function(){
-   btn.disabled=true;
-   api('guilds/approve',{id:g.id,on:!on}).then(function(){
-    toast(on?'🔒 انقفل السيرفر':'🔓 انفعّل السيرفر ('+(g.name||'')+')');
-    show('guilds');
-   }).catch(function(e){btn.disabled=false;toast(e.message,1)});
-  });
-  var open=el('button',{class:'b2',text:'فتح لوحته'});
-  open.addEventListener('click',function(){
-   api('guild',{id:g.id}).then(function(){location.reload()}).catch(function(e){toast(e.message,1)});
-  });
-  box.appendChild(el('div',{class:'item'},[
-   el('span',{class:'ic',text:g.nova?'👑':'🏠'}),
+ (d.bots||[]).forEach(function(b){
+  var k=[el('span',{class:'ic',text:b.self?'👑':'🤖'}),
    el('div',{style:'flex:1;min-width:0;text-align:right'},[
-    el('div',{class:'nm',text:g.name}),
-    el('div',{class:'mut',style:'font-size:12px',text:'👥 '+(g.members||0)+' عضو · 🔑 '+(g.allowed||0)+' مسموح'+(g.nova?' · سيرفرنا':'')})
+    el('div',{class:'nm',text:b.name+(b.self?' (هذا البوت)':'')}),
+    el('div',{class:'mut',style:'font-size:12px',text:(b.url||'')+' · 👥 '+(b.guilds||0)+' سيرفر'+(b.build?' · '+b.build:'')})
    ]),
-   el('span',{class:'tag '+(on?'on':'off'),text:on?'✅ مفعّل':'🔒 مقفول'}),
-   btn, open
-  ]));
+   el('span',{class:'tag '+(b.live?'on':'off'),text:b.live?(b.ready!==false?'✅ متصل':'⚠️ مو جاهز'):'❌ ما يرد'})];
+  if(b.error)k.push(el('span',{class:'mut',style:'font-size:11px',text:String(b.error).slice(0,70)}));
+  if(!b.self){
+   k.push(el('button',{class:'b2',text:'🔗 فتح لوحته',on:{click:function(){go(api('bots/open',{id:b.id}).then(function(r){window.open(r.url,'_blank')}),'فتحنا لوحته 🔗',null)}}}));
+   k.push(el('button',{class:'b2',text:'🧪 اختبار',on:{click:function(){go(api('bots/test',{id:b.id}).then(function(r){toast('✅ '+(r.ping&&r.ping.name||'')+' · '+(r.ping&&r.ping.guilds||0)+' سيرفر')}),'تم الفحص ✅',null)}}}));
+   k.push(el('button',{class:'dn',text:'🗑️ فصل',on:{click:function(){if(!confirm('نفصل بوت '+b.name+' عن اللوحة؟ (ما ينحذف شي من عنده)'))return;go(api('bots/del',{id:b.id}),'انفصل ✅','bots')}}}));
+  }
+  box.appendChild(el('div',{class:'item'},k));
  });
- m.appendChild(card('كل السيرفرات ('+(d.total||0)+') · المفعّلة: '+(d.active||0),box));
- m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;font-size:12px;line-height:1.9',text:'فعّل السيرفر → تنزل أوامره فوراً ويصير شغال. اقفله → تنمسح أوامره ويتوقف عن الرد (وبعدها يقدر صاحبه يدخل لوحته ويضيف مسؤولينه من «صلاحية الدخول 🔑»).'}));
- return;
-})}
+ m.appendChild(card('البوتات المربوطة ('+((d.bots||[]).length)+')',box));
+ var nm=el('input',{placeholder:'اسم البوت (مثال: بوت محمد)',style:'flex:1;min-width:160px'});
+ var ur=el('input',{placeholder:'رابط لوحته https://…ts.net',style:'flex:1;min-width:200px'});
+ var ky=el('input',{placeholder:'FED_KEY حق ذلك البوت',style:'flex:1;min-width:180px'});
+ m.appendChild(card('➕ ربط بوت جديد',el('div',{},[
+  el('div',{class:'mut',text:'من البوت الثاني: أضف بملف .env حقه سطر FED_KEY=<مفتاح طويل> ثم Restart، وخُذ نفس المفتاح وحطه هنا مع رابط لوحته.'}),
+  row([nm]),row([ur]),row([ky]),
+  row([el('button',{class:'btn',text:'🔗 ربط البوت',on:{click:function(){if(!nm.value||!ur.value||!ky.value)return toast('عبّي الحقول الثلاثة',1);
+    go(api('bots/save',{name:nm.value,url:ur.value,key:ky.value}).then(function(){nm.value='';ur.value='';ky.value='';}),'انربط ✅','bots')}}})])
+ ])));
+ m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;font-size:12px;line-height:1.9',text:'الربط ما يعطي أحد صلاحية: كل بوت يظل يحكم بصلاحياته هو. أنت (صاحب البوت) تشوف كل شي؛ وغيرك يشوف سيرفراته بس.'}));
+ return Promise.resolve()})};
+// ===== 🌐 السيرفرات: البوت مقفول افتراضياً — مين يشتغل ومين لا (فوق الكل فقط) =====
+pages.guilds=function(m){return api('servers').then(function(d){
+ m.appendChild(el('h1',{text:'السيرفرات 🌐'}));
+ m.appendChild(el('div',{class:'mut',text:'كل سيرفرات كل بوتاتك بمكان واحد. 🔒 أي سيرفر جديد يظل مقفول (ما يرد ولا تنزل أوامره) لحد ما تفعّله من هنا. جنب كل مجموعة اسم البوت اللي فيها.'}));
+ var by={};(d.servers||[]).forEach(function(s){var k=s.botName||'بوت';(by[k]=by[k]||[]).push(s)});
+ var names=Object.keys(by);
+ if(!names.length)m.appendChild(card('ما فيه سيرفرات',el('div',{class:'mut',text:'البوت مو بأي سيرفر للحين — أضفه لسيرفر أول.'})));
+ names.forEach(function(bn){
+  var box=el('div',{});
+  by[bn].forEach(function(g){
+   var on=!!g.approved;
+   var k=[el('span',{class:'ic',text:g.home?'👑':'🏠'}),
+    el('div',{style:'flex:1;min-width:0;text-align:right'},[
+     el('div',{class:'nm',text:g.name}),
+     el('div',{class:'mut',style:'font-size:12px',text:'👥 '+(g.members||0)+' عضو'+(g.home?' · سيرفر البيت':'')+' · 🆔 '+g.id})
+    ]),
+    el('span',{class:'tag '+(on?'on':'off'),text:on?'✅ مفعّل':'🔒 مقفول'})];
+   if(!g.home){
+    var btn=el('button',{class:'btn '+(on?'dn':''),text:on?'🔒 اقفل':'🔓 فعّل'});
+    btn.addEventListener('click',function(){btn.disabled=true;
+     api('servers/act',{bot:g.bot,id:g.id,on:!on}).then(function(){toast(on?'🔒 انقفل السيرفر':'🔓 انفعّل السيرفر');show('guilds')}).catch(function(e){btn.disabled=false;toast(e.message,1)})});
+    k.push(btn);
+   }
+   var open=el('button',{class:'b2',text:'فتح لوحته'});
+   open.addEventListener('click',function(){
+    if(g.bot==='self'){api('guild',{id:g.id}).then(function(){location.reload()}).catch(function(e){toast(e.message,1)})}
+    else{go(api('bots/open',{id:g.bot,gid:g.id}).then(function(r){window.open(r.url,'_blank')}),'فتحنا لوحته 🔗',null)}
+   });
+   k.push(open);
+   box.appendChild(el('div',{class:'item'},k));
+  });
+  m.appendChild(card('🤖 '+bn+' ('+by[bn].length+')',box));
+ });
+ m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;font-size:12px;line-height:1.9',text:'فعّل السيرفر → تنزل أوامره فوراً ويصير شغال. اقفله → تنمسح أوامره ويتوقف عن الرد. (سيرفر البيت ما ينقفل أبداً.)'}));
+ return Promise.resolve()})};
 // ===== 🔑 صلاحية الدخول للوحة (لكل سيرفر لحاله) =====
 pages.access=function(m){return api('access').then(function(d){
  m.appendChild(el('h1',{text:'صلاحية الدخول للوحة'}));
@@ -1804,7 +1840,22 @@ function guildPicker(d){var m=el('div',{class:'main'},[el('div',{class:'hero'},[
   box.appendChild(b);
  });
  m.appendChild(card('سيرفراتك',box));
- if(!(d.guilds||[]).length)m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;line-height:1.9',text:'ما عندك صلاحية دخول لوحة أي سيرفر حالياً. اللوحة ما تنفتح بالرابط — لازم إدارة نوفا تعطيك صلاحية الدخول من صفحة «صلاحية الدخول 🔑». (وإذا سيرفرك جديد: البوت مقفول افتراضياً ولازم إدارة نوفا تفعّله من «السيرفرات 🌐» أول.)'}));
+ if((d.fedBots||[]).length){
+  var fb=el('div',{});
+  (d.fedBots||[]).forEach(function(b){
+   var x=el('button',{class:'item gp'},[
+    el('span',{class:'ic',text:'🤖'}),
+    el('div',{style:'flex:1;text-align:right;min-width:0'},[
+     el('div',{class:'nm',text:b.name}),
+     el('div',{class:'mut',style:'font-size:12px',text:'لوحة بوت آخر · '+(b.guilds||0)+' سيرفر · تدخلها بضغطة'})
+    ]),
+    el('span',{class:'mut',text:'🔗'})]);
+   x.addEventListener('click',function(){api('bots/open',{id:b.id}).then(function(r){location.href=r.url}).catch(function(e){toast(e.message,1)})});
+   fb.appendChild(x);
+  });
+  m.appendChild(card('لوحات بوتاتك الثانية',fb));
+ }
+ if(!(d.guilds||[]).length&&!(d.fedBots||[]).length)m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;line-height:1.9',text:'ما عندك صلاحية دخول لوحة أي سيرفر حالياً. اللوحة ما تنفتح بالرابط — لازم إدارة البوت تعطيك صلاحية الدخول من صفحة «صلاحية الدخول 🔑». (وإذا سيرفرك جديد: البوت مقفول افتراضياً ولازم تفعّله من «السيرفرات 🌐» أول.)'}));
  m.appendChild(el('div',{class:'row',style:'margin-top:10px'},[el('a',{class:'b2',href:'/auth/logout',text:'🚪 خروج ('+d.user.name+')'})]));
  return m}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(function(){});
@@ -1878,11 +1929,16 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             if (!u.id) return res.status(403).send('⛔ تعذر قراءة حسابك من ديسكورد، جرب مرة ثانية');
             // 🔑 ما يدخل إلا اللي عنده صلاحية: فوق الكل (ارثر/إيدا) أو موجود بقائمة مسموحين سيرفر
             const list = await guildsFor(u);
-            if (!list.length) return res.status(403).send(
-                '<meta charset="utf-8"><div style="font-family:system-ui;direction:rtl;text-align:center;padding:60px 20px;background:#0f0e14;color:#eee;min-height:100vh">'
-                + '<div style="font-size:52px">🔒</div><h2>حسابك مو مسموح له بدخول اللوحة</h2>'
-                + '<p style="color:#aaa">اللوحة ما تنفتح بالرابط — لازم إدارة السيرفر تعطيك صلاحية الدخول أول.</p>'
-                + '<a href="/dashboard" style="color:#e0b64f">رجوع</a></div>');
+            if (!list.length) {
+                // 🤝 مو عندنا؟ نشوف لو عنده صلاحية بلوحة بوت ثاني (الاتحاد)
+                let fed2 = [];
+                try { fed2 = await fed.botsForUser(u.id); } catch { fed2 = []; }
+                if (!fed2.length) return res.status(403).send(
+                    '<meta charset="utf-8"><div style="font-family:system-ui;direction:rtl;text-align:center;padding:60px 20px;background:#0f0e14;color:#eee;min-height:100vh">'
+                    + '<div style="font-size:52px">🔒</div><h2>حسابك مو مسموح له بدخول اللوحة</h2>'
+                    + '<p style="color:#aaa">اللوحة ما تنفتح بالرابط — لازم إدارة السيرفر تعطيك صلاحية الدخول أول.</p>'
+                    + '<a href="/dashboard" style="color:#e0b64f">رجوع</a></div>');
+            }
             const gid = list.length === 1 ? list[0].id : '';   // سيرفر واحد → يدخل عليه مباشرة
             setCookie(res, 'dash', sign({ id: u.id, name: u.global_name || u.username, gid, exp: Date.now() + WEEK }), WEEK / 1000);
             setCookie(res, 'oauth_state', '', 0);
@@ -1895,6 +1951,25 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
 
     app.get('/auth/logout', (req, res) => { setCookie(res, 'dash', '', 0); res.redirect('/dashboard'); });
 
+    // 🤝 الاتحاد: البوت يفتح بابه للوحة الرئيسية (محمي بمفتاح FED_KEY)
+    try { fed.mount(app, { client, CONFIG, access, express, build: BUILD }); }
+    catch (e) { console.error('⚠️ تعذّر تشغيل الاتحاد:', e.message); }
+
+    // 🤝 دخول موحّد: نجي من اللوحة الرئيسية بتوكن موقّع — ندخّلك بلا تسجيل دخول ثاني
+    app.get('/dashboard/sso', (req, res) => {
+        const key = fed.KEY();
+        const p = key ? fed.check(key, req.query.t) : null;
+        const fail = (m) => res.status(403).type('html').send('<meta charset="utf-8"><div style="font-family:system-ui;direction:rtl;text-align:center;padding:60px 20px;background:#0f0e14;color:#eee;min-height:100vh">'
+            + '<div style="font-size:52px">⛔</div><h2>' + m + '</h2>'
+            + '<p style="color:#aaa">ارجع للوحة الرئيسية واضغط «افتح اللوحة» مرة ثانية.</p></div>');
+        if (!p) return fail('رابط الدخول غير صالح أو انتهى');
+        const g = p.gid ? client.guilds.cache.get(String(p.gid)) : null;
+        if (p.gid && !g) return fail('البوت مو بهذا السيرفر');
+        if (g && !access.canUse(g, p.uid, CONFIG)) return fail('ما عندك صلاحية دخول هذا السيرفر');
+        setCookie(res, 'dash', sign({ id: String(p.uid), name: String(p.name || 'عضو'), gid: g ? g.id : '', exp: Date.now() + WEEK }), WEEK / 1000);
+        res.redirect('/dashboard');
+    });
+
     const api = express.Router();
     api.use(express.json({ limit: '100kb' }));
     api.get('/me', async (req, res) => {
@@ -1903,6 +1978,9 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const guilds = await guildsFor(s);
         const gid = guildId(req) || (guilds.length === 1 ? guilds[0].id : '');
         const g = gid ? client.guilds.cache.get(gid) : null;
+        const isSuper = access.isSuper(s.id, CONFIG);
+        let fedBots = [];
+        if (!guilds.length || !gid) { try { fedBots = await fed.botsForUser(s.id); } catch { fedBots = []; } }
         res.json({
             enabled,
             user: { id: s.id, name: s.name },
@@ -1910,8 +1988,9 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             guild: g ? { id: g.id, name: g.name, icon: g.iconURL({ size: 64 }) || '' } : null,
             nova: !!(g && String(g.id) === String(CONFIG.GUILD_ID)),
             canManageAccess: !!(g && access.canManage(g, s.id, CONFIG)),
-            isSuper: access.isSuper(s.id, CONFIG),
-            public: access.publicBot()
+            isSuper,
+            public: access.publicBot(),
+            fedBots
         });
     });
     // فحص سريع من المتصفح (بدون تسجيل دخول): يثبت أن السيرفر يرجع JSON فعلاً
@@ -2952,6 +3031,152 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         store.write('dashlog.json', l.slice(0, 300));
         res.json({ ok: true, id: gid, approved: on });
     }));
+
+    // ===== 🤝 البوتات: ربط بوتات ثانية بنفس اللوحة =====
+    const supAny = (fn) => async (req, res) => {
+        const s = session(req);
+        if (!s || !access.isSuper(s.id, CONFIG)) return res.status(403).json({ error: 'هذي الصفحة خاصة بصاحب البوت فقط 👑' });
+        if (req.method !== 'GET' && req.get('x-dash') !== '1') return res.status(403).json({ error: 'طلب مرفوض' });
+        try { return await fn(s, req, res); }
+        catch (e) { res.status(400).json({ error: String(e.message || 'خطأ').slice(0, 160) }); }
+    };
+
+    api.get('/bots', supAny(async (s, req, res) => {
+        const out = [{
+            id: 'self', self: true, name: (client.user && client.user.username) || 'هذا البوت', url: BASE(),
+            live: true, ready: client.isReady(), build: BUILD, keySet: !!fed.KEY(),
+            guilds: client.guilds.cache.size, approved: [...client.guilds.cache.values()].filter(x => access.isApproved(x.id, CONFIG)).length,
+            error: ''
+        }];
+        for (const b of fed.list()) {
+            let st = {};
+            try { st = await fed.call(b, 'ping', null, 6000); }
+            catch (e) { st = { error: String(e.message || e) }; }
+            out.push({
+                id: b.id, name: b.name, url: b.url, keySet: !!b.key, live: !!st.ok, ready: !!st.ready,
+                build: st.build || '', guilds: st.guilds || 0, botName: st.name || '', error: st.error || ''
+            });
+        }
+        res.json({ bots: out, masterKeySet: !!fed.KEY(), master: fed.MASTER() });
+    }));
+
+    api.post('/bots/save', supAny(async (s, req, res) => {
+        const b = req.body || {};
+        const url = fed.norm(b.url);
+        const key = String(b.key || '').trim();
+        let ping;
+        try { ping = await fed.call({ url, key }, 'ping', null, 8000); }
+        catch (e) { throw new Error('ما قدرت أوصل للبوت: ' + e.message + ' — تأكد من الرابط والمفتاح'); }
+        const saved = fed.save({ id: b.id, name: b.name || ping.name, url, key });
+        const l = store.read('dashlog.json', []);
+        l.unshift({ at: Date.now(), by: s.name, gid: '', msg: '🤝 ربط بوت: ' + saved.name + ' (' + saved.url + ')' });
+        store.write('dashlog.json', l.slice(0, 300));
+        res.json({ ok: true, bot: saved, ping });
+    }));
+
+    api.post('/bots/del', supAny(async (s, req, res) => {
+        const id = String((req.body && req.body.id) || '');
+        if (id === 'self') throw new Error('هذا البوت نفسه ما ينحذف');
+        const b = fed.get(id);
+        fed.del(id);
+        const l = store.read('dashlog.json', []);
+        l.unshift({ at: Date.now(), by: s.name, gid: '', msg: '🗑️ فصل بوت: ' + ((b && b.name) || id) });
+        store.write('dashlog.json', l.slice(0, 300));
+        res.json({ ok: true });
+    }));
+
+    api.post('/bots/test', supAny(async (s, req, res) => {
+        const id = String((req.body && req.body.id) || '');
+        const b = id === 'self' ? { url: BASE(), key: fed.KEY() } : fed.get(id);
+        if (!b) throw new Error('البوت مو موجود');
+        const p = await fed.call(b, 'ping', null, 8000);
+        res.json({ ok: true, ping: p });
+    }));
+
+    // فتح لوحة بوت (SSO): توكن موقّع بمفتاح ذلك البوت — صالح دقيقتين
+    // 🤝 فتح لوحة بوت آخر بتوكن موقّع — ما ينفتح إلا لو الحساب عنده صلاحية فعلاً عند ذلك البوت
+    api.post('/bots/open', async (req, res) => {
+        const s = session(req);
+        if (!s) return res.status(401).json({ error: 'سجّل دخولك أول' });
+        if (req.get('x-dash') !== '1') return res.status(403).json({ error: 'طلب مرفوض' });
+        try {
+            const id = String((req.body && req.body.id) || 'self');
+            const gid = String((req.body && req.body.gid) || '');
+            if (id === 'self') return res.json({ url: '/dashboard', self: true });
+            const b = fed.get(id);
+            if (!b) throw new Error('البوت مو موجود');
+            const a = await fed.accessOf(b, s.id);
+            const gs = (a && a.guilds) || [];
+            const okG = gid ? gs.some(x => x.id === gid) : gs.length > 0;
+            if (!a || (!a.super && !okG)) throw new Error('ما عندك صلاحية على هذا البوت');
+            res.json({ url: fed.norm(b.url) + '/dashboard/sso?t=' + encodeURIComponent(fed.tokenFor(b, s.id, s.name, gid)) });
+        } catch (e) { res.status(400).json({ error: String(e.message || 'خطأ').slice(0, 160) }); }
+    });
+
+    // كل السيرفرات (كل البوتات) — مع احترام الصلاحيات
+    api.get('/servers', async (req, res) => {
+        const s = session(req);
+        if (!s) return res.status(401).json({ error: 'سجّل دخولك أول' });
+        try {
+            const sup = access.isSuper(s.id, CONFIG);
+            const rows = [...client.guilds.cache.values()]
+                .filter(x => sup || access.canUse(x, s.id, CONFIG))
+                .map(x => ({
+                    bot: 'self', botName: 'هذا البوت', id: x.id, name: x.name, icon: (x.iconURL && x.iconURL({ size: 64 })) || '',
+                    members: x.memberCount || 0, approved: access.isApproved(x.id, CONFIG), home: String(x.id) === String(CONFIG.GUILD_ID)
+                }));
+            for (const b of fed.list()) {
+                try {
+                    let gs;
+                    if (sup) gs = (await fed.call(b, 'guilds', null, 7000)).guilds || [];
+                    else {
+                        const a = await fed.accessOf(b, s.id);
+                        gs = (a && a.guilds) || [];
+                        if (a && a.super) gs = (await fed.call(b, 'guilds', null, 7000)).guilds || [];
+                    }
+                    for (const x of gs) rows.push({ bot: b.id, botName: b.name, id: x.id, name: x.name, icon: x.icon || '', members: x.members || 0, approved: !!x.approved, home: !!x.home });
+                } catch { }
+            }
+            rows.sort((a, b) => (b.members || 0) - (a.members || 0));
+            res.json({ servers: rows, total: rows.length, active: rows.filter(x => x.approved).length, bots: fed.list().length + 1 });
+        } catch (e) { res.status(400).json({ error: String(e.message || 'خطأ').slice(0, 160) }); }
+    });
+
+    api.post('/servers/act', async (req, res) => {
+        const s = session(req);
+        if (!s) return res.status(401).json({ error: 'سجّل دخولك أول' });
+        if (req.get('x-dash') !== '1') return res.status(403).json({ error: 'طلب مرفوض' });
+        try {
+            const botId = String((req.body && req.body.bot) || 'self');
+            const gid = String((req.body && req.body.id) || '').trim();
+            const on = !!(req.body && req.body.on);
+            if (!/^\d{5,25}$/.test(gid)) throw new Error('آيدي غير صالح');
+            const sup = access.isSuper(s.id, CONFIG);
+            if (botId === 'self') {
+                const g = client.guilds.cache.get(gid);
+                if (!g) throw new Error('السيرفر مو موجود (البوت مو فيه)');
+                if (!sup && !access.canManage(g, s.id, CONFIG)) throw new Error('ما عندك صلاحية على هذا السيرفر');
+                if (String(gid) === String(CONFIG.GUILD_ID) && !on) throw new Error('سيرفر البيت ما ينقفل أبداً');
+                access.approve(gid, on, s.id, g.name);
+                try { if (typeof client.syncGuildCommands === 'function') await client.syncGuildCommands(g); } catch { }
+                const l = store.read('dashlog.json', []);
+                l.unshift({ at: Date.now(), by: s.name, gid, msg: (on ? '🔓 تفعيل السيرفر: ' : '🔒 قفل السيرفر: ') + g.name });
+                store.write('dashlog.json', l.slice(0, 300));
+                return res.json({ ok: true, bot: 'self', id: gid, approved: on });
+            }
+            const b = fed.get(botId);
+            if (!b) throw new Error('البوت مو موجود');
+            if (!sup) {
+                const a = await fed.accessOf(b, s.id);
+                if (!a || (!a.super && !(a.guilds || []).some(x => x.id === gid))) throw new Error('ما عندك صلاحية على هذا السيرفر');
+            }
+            const r = await fed.call(b, 'act', { id: gid, on });
+            const l = store.read('dashlog.json', []);
+            l.unshift({ at: Date.now(), by: s.name, gid, msg: (on ? '🔓 تفعيل سيرفر بوت آخر: ' : '🔒 قفل سيرفر بوت آخر: ') + gid + ' @ ' + b.name });
+            store.write('dashlog.json', l.slice(0, 300));
+            res.json({ ok: true, bot: botId, id: gid, approved: !!r.approved });
+        } catch (e) { res.status(400).json({ error: String(e.message || 'خطأ').slice(0, 160) }); }
+    });
 
     // ===== 🔑 صلاحية الدخول للوحة: من يدخل لوحة هذا السيرفر (أنا اللي أعطيها) =====
     api.get('/access', h(async (g, b, req) => {
