@@ -18,8 +18,18 @@ const TYPE = { play: 0, stream: 1, listen: 2, watch: 3, compete: 5 };
 const TYPE_AR = { play: 'يلعب', stream: 'يبث', listen: 'يستمع إلى', watch: 'يشاهد', compete: 'ينافس في' };
 const TYPE_EMOJI = { play: '🎮', stream: '🔴', listen: '🎧', watch: '👀', compete: '🏆' };
 
+// 🏷️ اسم الهوية اللي يظهر بحالات البوت (افتراضي: نوفا).
+//    من .env:  BRAND_NAME=𝗖𝗿𝗶𝗺𝘀𝗼𝗻 𝗡𝗢𝗩𝗔
+//    أي كلمة «نوفا» بالحالات المحفوظة تتحول لهذا الاسم تلقائياً (بدون ما تلمس باقي النص).
+const BRAND = String(process.env.BRAND_NAME || '').trim().slice(0, 60);
+const brandify = (list, brand) => {
+    const b = String(brand || '').trim();
+    return b ? list.map(it => ({ ...it, name: String(it.name || '').split('نوفا').join(b) })) : list;
+};
+
 const DEF = {
     enabled: true,
+    brand: '',              // اسم الهوية اللي يظهر بالحالة (فاضي = من .env BRAND_NAME، وإلا «نوفا»)
     intervalSec: 60,        // كل كم ثانية نبدّل الحالة (الحد الأدنى ٣٠)
     status: 'online',       // online | idle | dnd | invisible
     dynamic: true,          // يضيف حالات محسوبة (عدد الأعضاء · مدة الصمود)
@@ -57,11 +67,13 @@ function cleanItems(list) {
 function get(gid) {
     const c = all()[gid] || {};
     const items = cleanItems(c.items);
+    const brand = String(c.brand === undefined || c.brand === null ? BRAND : c.brand).trim().slice(0, 60);
     return {
         ...DEF, ...c,
+        brand,
         intervalSec: num(c.intervalSec, 30, 3600, DEF.intervalSec),
         mirrorMinutes: num(c.mirrorMinutes, 1, 240, DEF.mirrorMinutes),
-        items: items.length ? items : cleanItems(DEF.items),
+        items: brandify(items.length ? items : cleanItems(DEF.items), brand),
         mirrorUsers: ids((c.mirrorUsers || []).join(' '))
     };
 }
@@ -71,6 +83,7 @@ function set(gid, b) {
     const cur = get(gid);
     a[gid] = {
         enabled: 'enabled' in b ? !!b.enabled : cur.enabled,
+        brand: b.brand !== undefined ? String(b.brand || '').trim().slice(0, 60) : cur.brand,
         status: ['online', 'idle', 'dnd', 'invisible'].includes(String(b.status)) ? String(b.status) : cur.status,
         intervalSec: num(b.intervalSec, 30, 3600, cur.intervalSec),
         dynamic: 'dynamic' in b ? !!b.dynamic : cur.dynamic,
@@ -94,10 +107,11 @@ function reset(gid) {
 }
 
 // ===== الحالات المحسوبة (أرقام حقيقية) =====
-function dynItems() {
+function dynItems(brand) {
     const g = guildOf();
     const out = [];
-    if (g) out.push({ name: `${g.memberCount} عضو في نوفا`, type: 'watch', url: '' });
+    const nm = String(brand || BRAND || '').trim() || 'نوفا';
+    if (g) out.push({ name: `${g.memberCount} عضو في ${nm}`, type: 'watch', url: '' });
     const mins = Math.max(1, Math.round(process.uptime() / 60));
     out.push({ name: `صامد ${mins} دقيقة بلا انقطاع`, type: 'watch', url: '' });
     out.push({ name: `واقف معاك: ${new Date().toLocaleTimeString('ar-OM', { hour: '2-digit', minute: '2-digit' })}`, type: 'watch', url: '' });
@@ -132,7 +146,7 @@ function push(entry, source, by) {
 function current() {
     const cfg = get(CONFIG.GUILD_ID);
     if (Date.now() < hold.until && hold.text) return { name: hold.text, type: hold.type, source: 'مرآة', by: hold.by };
-    const list = cfg.items.concat(cfg.dynamic ? dynItems() : []);
+    const list = cfg.items.concat(cfg.dynamic ? dynItems(cfg.brand) : []);
     const it = list[ref.index % list.length] || list[0];
     return it ? { name: it.name, type: it.type, url: it.url, source: 'دوّارة' } : null;
 }

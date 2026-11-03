@@ -35,6 +35,11 @@ if (canvasLib) {
 }
 const available = () => !!canvasLib && fontOk;
 
+// 🏷️ اسم الهوية اللي ينكتب أعلى كل صورة (يسار). افتراضي NOVA، وينغيّر من .env:
+//    BRAND_LATIN=CRIMSON NOVA
+//    ⚠️ بالحروف اللاتينية فقط — الحروف المزخرفة (𝗖𝗿𝗶𝗺𝘀𝗼𝗻) يطلع مكانها مربع فاضي بخط الصور.
+const BRAND_LATIN = (String(process.env.BRAND_LATIN || 'NOVA').trim() || 'NOVA').toUpperCase().slice(0, 24);
+
 // ===== الألوان (هوية نوفا) =====
 const C = {
     ink1: '#1a1622', ink2: '#0a090d',
@@ -328,14 +333,20 @@ async function watermark(ctx, w, h) {
     novaMark(ctx, 130, h - 120, 90, 0.05);
 }
 
-// ترويسة الصفحة: شعار صغير + NOVA يسار، واسم السيرفر يمين
+// ترويسة الصفحة: شعار صغير + اسم الهوية يسار، واسم السيرفر يمين
 async function brand(ctx, w, { server, pad = 48, y = 74 } = {}) {
     await drawLogo(ctx, pad + 24, y - 12, 48, 1);
     let x = pad + 58;
-    const letters = 'NOVA';
-    ctx.font = '600 28px ' + FONT_STACK;
+    const letters = BRAND_LATIN;
     ctx.textAlign = 'left'; ctx.direction = 'ltr';
     ctx.fillStyle = C.gold;
+    // نقيس النص بالمقاس الأساسي، ولو طويل نصغّره عشان ما يزحم كبسولة اسم السيرفر
+    const widthAt = (s) => { ctx.font = '600 ' + s + 'px ' + FONT_STACK; let t = 0; for (const ch of letters) t += ctx.measureText(ch).width + 5; return t; };
+    let size = 28;
+    const room = Math.max(120, w - pad * 2 - 58 - Math.min(w * 0.52, 300) - 30);
+    const total = widthAt(size);
+    if (total > room) size = Math.max(13, Math.floor(size * room / total));
+    widthAt(size);
     for (const ch of letters) { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + 5; }
     // اسم السيرفر داخل كبسولة — نقيس النص بعد التنظيف (لا مربعات، ولا يزحف على الشعار)
     const srv0 = san(server);

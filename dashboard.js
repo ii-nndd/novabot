@@ -54,7 +54,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-30.1';
+const BUILD = '2026-11-03.1';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -1082,6 +1082,7 @@ var sts=el('select',{},[opt('online','🟢 متصل'),opt('idle','🌙 خامل'
 var an=sel('بدون روم (ما ننشر)',d.channels,c.announceId);
 var mu=el('textarea',{placeholder:'آيدي كل حساب نعكس نشاطه، كل وحد بسطر (اتركه فاضي = ارثر وإيدا والرتبة الملكية)'});mu.value=(c.mirrorUsers||[]).join('\\n');
 var mm=inp(c.mirrorMinutes,1,240);
+var br=el('input',{type:'text',style:'flex:1;min-width:220px',placeholder:'مثال: 𝗖𝗿𝗶𝗺𝘀𝗼𝗻 𝗡𝗢𝗩𝗔 (فاضي = نوفا)'});br.value=String(c.brand||'');
 var items=(c.items||[]).map(function(x){return{name:String(x.name||''),type:String(x.type||'play'),url:String(x.url||'')}});
 var box=el('div',{});
 function render(){
@@ -1105,7 +1106,7 @@ function render(){
  if(!items.length)box.appendChild(el('div',{class:'mut',text:'ما فيه حالات — اضغط «➕ إضافة حالة»'}));
 }
 render();
-function body(){var o={enabled:s.enabled,status:sts.value,intervalSec:iv.value,dynamic:s.dyn,mirror:s.mir,announceId:an.value,mirrorMinutes:mm.value,mirrorUsersText:mu.value};o.items=items.map(function(x){return{name:x.name,type:x.type,url:x.url}});return o}
+function body(){var o={enabled:s.enabled,brand:br.value,status:sts.value,intervalSec:iv.value,dynamic:s.dyn,mirror:s.mir,announceId:an.value,mirrorMinutes:mm.value,mirrorUsersText:mu.value};o.items=items.map(function(x){return{name:x.name,type:x.type,url:x.url}});return o}
 m.appendChild(card('الحالة الآن',el('div',{},[
  el('div',{class:'row'},[el('span',{class:'tag '+(st.enabled?'on':'off'),text:st.enabled?'✅ الحالة شغالة':'⛔ الحالة مطفية'}),el('span',{class:'tag',text:'يبيّن: '+((st.now&&st.now.text)||'—')}),el('span',{class:'tag',text:'المصدر: '+((st.now&&st.now.source)||'—')})]),
  el('div',{class:'mut',style:'margin-top:8px',text:'عدد الحالات: '+(st.total||0)+' — التبديل كل '+c.intervalSec+' ثانية'+(st.mirrorNow?(' · 🪞 ماسك حالة: '+st.mirrorHold):'')}),
@@ -1113,6 +1114,8 @@ m.appendChild(card('الحالة الآن',el('div',{},[
  el('div',{class:'mut',text:'آخر تحديث: '+((st.now&&st.now.at)?new Date(st.now.at).toLocaleTimeString('ar-OM'):'—')})
 ])));
 m.appendChild(card('الإعدادات الأساسية',el('div',{},[
+ el('div',{class:'mut',text:'🏷️ اسم الهوية: اللي يظهر مكان كلمة «نوفا» بكل الحالات. يقبل الحروف المزخرفة (𝗖𝗿𝗶𝗺𝘀𝗼𝗻 𝗡𝗢𝗩𝗔). اتركه فاضي = «نوفا».'}),
+ el('div',{class:'row'},[br]),
  tgl('enabled','تفعيل الحالة الدوّارة'),
  tgl('dyn','حالات ديناميكية (عدد الأعضاء · مدة الصمود · الوقت)'),
  tgl('mir','مرآة نشاط الملكيين (يحتاج Presence Intent)'),
@@ -1333,13 +1336,18 @@ m.appendChild(row([
 return Promise.resolve()})};
 pages.bans=function(m){return api('bans').then(function(d){
 m.appendChild(el('h1',{text:'المحظورين'}));
-m.appendChild(el('div',{class:'mut',text:'كل المحظورين بالسيرفر من أي مصدر. اللي انحظر من روم الفخ عليه وسم 🪤. تقدر تفك الحظر مباشرة من هنا.'}));
+m.appendChild(el('div',{class:'mut',text:'كل المحظورين بالسيرفر — ومع كل واحد مَن اللي حظره ومن أي بوت. اللي انحظر من روم الفخ عليه وسم 🪤.'}));
+if(d.auditOk===false)m.appendChild(el('div',{class:'card'},[el('div',{class:'nm',text:'⚠️ ما قدرت أقرأ سجل التدقيق'}),el('div',{class:'mut',text:'عشان يبين لك «مَن حظر» لازم البوت عنده صلاحية «عرض سجل التدقيق / View Audit Log». أعطها له من إعدادات رتبة البوت ثم أعد المحاولة.'})]));
 var box=el('div',{class:'card'});
 if(!d.bans.length)box.appendChild(el('div',{class:'mut',text:'ما فيه محظورين حالياً ✅'}));
 d.bans.forEach(function(b){
 var k=[el('span',{class:'nm',text:b.display+' (@'+b.name+')'}),el('span',{class:'tag',text:'🆔 '+b.id})];
 if(b.trap)k.push(el('span',{class:'tag',text:'🪤 روم الفخ'}));
-if(b.reason)k.push(el('span',{class:'mut',text:b.reason.slice(0,60)}));
+if(b.byId&&b.byId===d.botId)k.push(el('span',{class:'tag',text:'🤖 البوت نفسه'}));
+else if(b.by)k.push(el('span',{class:'tag',text:'🚫 حظر بواسطة: '+b.by}));
+else k.push(el('span',{class:'tag off',text:'❓ الفاعل غير معروف'}));
+if(b.byAt)k.push(el('span',{class:'mut',text:new Date(b.byAt).toLocaleString('ar')}));
+if(b.reason)k.push(el('span',{class:'mut',text:'السبب: '+b.reason.slice(0,90)}));
 k.push(el('button',{class:'b2',text:'فك الحظر',on:{click:function(){if(confirm('فك الحظر عن '+b.display+' ؟'))go(api('bans/unban',{id:b.id,confirm:true}),'تم فك الحظر ✅','bans')}}}));
 box.appendChild(el('div',{class:'item'},k))});
 m.appendChild(box);
@@ -2724,15 +2732,52 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     api.get('/bans', h(async (g) => {
         const bans = await g.bans.fetch();
         const rec = store.read('trapbans.json', {});
-        return {
-            bans: [...bans.values()].map(b => ({
+        const blog = store.read('banlog.json', {});
+        // مَن حظر؟ من سجل تدقيق ديسكورد (آخر ١٠٠ حظر) — يحتاج صلاحية «عرض سجل التدقيق»
+        const who = {};
+        let auditOk = true;
+        try {
+            const al = await g.fetchAuditLogs({ type: 22, limit: 100 });
+            for (const e of al.entries.values()) {
+                const tid = e.target && e.target.id;
+                if (!tid || who[tid]) continue;
+                who[tid] = {
+                    byId: e.executorId || '',
+                    by: e.executor ? (e.executor.globalName || e.executor.username || e.executorId) : (e.executorId || ''),
+                    at: e.createdTimestamp || 0,
+                    src: 'discord'
+                };
+            }
+        } catch (err) { auditOk = false; }
+        const botId = g.client.user ? g.client.user.id : '';
+        const rows = [...bans.values()].map(b => {
+            const mine = blog[b.user.id] || {};
+            const w = who[b.user.id] || {};
+            return {
                 id: b.user.id,
                 name: b.user.username,
                 display: b.user.globalName || b.user.username,
-                reason: b.reason || '',
+                reason: b.reason || w.reason || mine.reason || '',
                 trap: !!rec[b.user.id],
-                at: rec[b.user.id] ? rec[b.user.id].at : 0
-            })).sort((a, b) => (b.at || 0) - (a.at || 0) || a.name.localeCompare(b.name))
+                at: rec[b.user.id] ? rec[b.user.id].at : 0,
+                by: w.by || '',
+                byId: w.byId || mine.byId || '',
+                byAt: w.at || mine.at || 0
+            };
+        });
+        // نكمّل أسماء الحاظرين اللي ما لهم اسم بسجل التدقيق (من السجل المحلي أو من أعضاء السيرفر)
+        const need = [...new Set(rows.filter(r => r.byId && !r.by).map(r => r.byId))];
+        for (const id of need.slice(0, 20)) {
+            if (id === botId) continue;
+            const mem = g.members.cache.get(id) || await g.members.fetch(id).catch(() => null);
+            const nm = mem ? (mem.displayName || mem.user.username) : '';
+            if (nm) rows.forEach(r => { if (r.byId === id && !r.by) r.by = nm; });
+        }
+        rows.forEach(r => { if (r.byId && r.byId === botId && !r.by) r.by = 'درع البوت'; });
+        return {
+            auditOk,
+            botId,
+            bans: rows.sort((a, b) => (b.byAt || b.at || 0) - (a.byAt || a.at || 0) || a.name.localeCompare(b.name))
         };
     }));
     api.post('/bans/unban', h(async (g, b, req) => {

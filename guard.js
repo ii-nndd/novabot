@@ -759,6 +759,14 @@ function init(client, CONFIG_) {
         const guild = ban.guild;
         if (!guild) return;
         const uid = await actorOf(guild, AuditLogEvent.MemberBanAdd, ban.user.id);
+        // 📝 نسجّل كل حظر (مَن + متى + السبب) عشان يبين بصفحة «المحظورين» — سجل تدقيق ديسكورد ينمسح بعد فترة
+        try {
+            const bl = store.read('banlog.json', {});
+            bl[ban.user.id] = { at: Date.now(), byId: uid || '', reason: String(ban.reason || '') };
+            const keys = Object.keys(bl);
+            if (keys.length > 400) keys.sort((a, b) => (bl[a].at || 0) - (bl[b].at || 0)).slice(0, keys.length - 400).forEach(k => delete bl[k]);
+            store.write('banlog.json', bl);
+        } catch { }
         if (uid && immune(guild, uid)) { exemptNote(guild, uid, 'ban', 'عضو ' + ban.user.username).catch(() => { }); return; }
         await handleAction(guild, {
             type: 'ban', uid, targetId: ban.user.id, detail: `حظر ${ban.user.username}`,
