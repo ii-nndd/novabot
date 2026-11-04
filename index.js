@@ -8,6 +8,8 @@ const {
 const express = require('express');
 const R = require('./replies');
 const store = require('./store');
+const call = require('./call');
+const love = require('./love');
 const botcontrol = require('./botcontrol');
 const mountDashboard = require('./dashboard');
 const welcome = require('./welcome');
@@ -90,16 +92,9 @@ try {
 //    LOVE_ALLOW_IDS=123456789,987654321
 const LOVE_ALLOW_IDS = String(process.env.LOVE_ALLOW_IDS || '').split(/[,\s]+/).filter(Boolean);
 
-// نسبة الحب: لو الزوجين بالقائمة الثابتة نرجّع نسبتهم المحفوظة، وإلا الحساب القديم
+// نسبة الحب: من نظام «الحب 💘» (عشوائية تتغيّر) — والاستثناءات تُدار من اللوحة
 function lovePercent(x, y) {
-    const p = [String(x), String(y)];
-    const hit = LOVE_FIXED.find(o => (o.a === p[0] && o.b === p[1]) || (o.a === p[1] && o.b === p[0]));
-    if (hit) return { percent: hit.pct, fixed: true };
-    try {
-        return { percent: Number((BigInt(p[0]) + BigInt(p[1])) % 101n), fixed: false };
-    } catch {
-        return { percent: 50, fixed: false };
-    }
+    return love.percent(x, y);
 }
 
 // 🔒 نسجّل الإعدادات بنظام الصلاحية/القفل (access) — عشان أي ملف يقدر يسأل «هذا السيرفر مفعّل؟»
@@ -546,7 +541,7 @@ client.on('interactionCreate', async (interaction) => {
     // الرومات المسموح فيها: لو الروم معطّل، نرد برسالة واضحة بدل السكوت (السكوت يطلع «التطبيق لم يستجب»)
     if (interaction.guild && interaction.channel && !botcontrol.canInteract(interaction.guild.id, interaction.channel.id)) {
         return interaction.reply({
-            content: '🔒 البوت **معطّل في هذا الروم** — عشان كذا ما رد عليك.\nاكتب هنا: **يا عبد شغل البوت** ويرجع فوراً، أو فعّله من اللوحة ← «التحكم بالبوت».',
+            content: '🔒 البوت **معطّل في هذا الروم** — عشان كذا ما رد عليك.\nاكتب هنا: **' + call.phrase() + ' شغل البوت** ويرجع فوراً، أو فعّله من اللوحة ← «التحكم بالبوت».',
             flags: MessageFlags.Ephemeral
         }).catch(() => {});
     }
@@ -596,7 +591,7 @@ client.on('interactionCreate', async (interaction) => {
                 const ch = await comeToMe(interaction.member);
                 return say(ch
                     ? `🫡 أبشر يا طويل العمر، جيت عندك في **${ch.name}** 🎙️`
-                    : '🫡 أبشر، دخلت الفويس المحدد 🎙️\n(ادخل روم صوتي وقل «يا عبد تعال» وأجيك عندك على طول)');
+                    : '🫡 أبشر، دخلت الفويس المحدد 🎙️\n(ادخل روم صوتي وقل «' + call.phrase() + ' تعال» وأجيك عندك على طول)');
             }
 
             case 'اطلع':
@@ -682,12 +677,13 @@ client.on('interactionCreate', async (interaction) => {
 
             case 'حب': {
                 // 🔒 الصلاحية تُدار من اللوحة ← صفحة «الأوامر» (والافتراضي: الإدارة والملكي)
+                if (!love.get().enabled) return say('💘 أمر الحب مقفل حالياً — يفتحه صاحب اللوحة من صفحة «الحب».');
                 const a = interaction.options.getUser('الاول');
                 const b = interaction.options.getUser('الثاني') ?? interaction.user;
                 const r = lovePercent(a.id, b.id);
                 return say(
                     `💘 نسبة التوافق بين ${a} و ${b}: **${r.percent}%**`
-                    + (r.fixed ? '\n💞 نسبة ثابتة للأبد — ما تنزل ولا تنقص أبداً.' : '')
+                    + (r.fixed ? '\n💞 نسبة ثابتة للأبد — ما تنزل ولا تنقص أبداً.' : '\n🎲 نسبة عشوائية — جرّب مرة ثانية ويمكن تتغيّر.')
                 );
             }
 
@@ -721,7 +717,7 @@ client.on('interactionCreate', async (interaction) => {
                         { name: '🎉 فعاليات', value: '`/قرعة_بدء` `/قرعة_انهاء` `/رتب_لوحة`' },
                         { name: '📊 عام', value: '`/حالة` `/بينج` `/فلوس` `/سيرفر`' },
                         { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/شيل_تحذير` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
-                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20** / **يا عبد الألوان** (يولّد صورة الألوان ويحدّث البانل)، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
+                        { name: '💬 بالكلام', value: ('نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20** / **يا عبد الألوان** (يولّد صورة الألوان ويحدّث البانل)، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).').split('يا عبد').join(call.phrase()) }
                     );
                 return say({ embeds: [helpEmbed] });
             }
@@ -794,10 +790,10 @@ const asInteraction = (message, name) => {
 
 const TEXT_GAMES = { 'سرعه': 'سرعة', 'رياضيات': 'رياضيات', 'مبعثره': 'مبعثرة', 'اعلام': 'اعلام', 'كلمه': 'كلمة_السر', 'السر': 'كلمة_السر' };
 
-// البوت ينادى فقط بـ: يا عبد / عبد / منشن / الرد على رسالته
+// البوت ينادى بالاسم اللي تحدده من اللوحة (افتراضياً: يا عبد) / منشن / الرد على رسالته
 async function isCalled(message, tokens, content) {
     if (message.mentions.has(client.user, { ignoreEveryone: true, ignoreRoles: true }) ||
-        content.includes('يا عبد') || tokens.includes('عبد') || tokens.includes('العبد')) return true;
+        call.has(content, tokens)) return true;
     if (message.reference && message.reference.messageId) {
         const ref = await message.fetchReference().catch(() => null);
         return !!ref && ref.author.id === client.user.id;
@@ -810,7 +806,7 @@ async function isCalled(message, tokens, content) {
 const norm = (t) => t.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
 async function handleChannelToggle(message) {
     const c = norm(message.content);
-    const called = message.mentions.has(client.user, { ignoreEveryone: true, ignoreRoles: true }) || c.includes('يا عبد');
+    const called = message.mentions.has(client.user, { ignoreEveryone: true, ignoreRoles: true }) || call.has(message.content);
     if (!called) return false;
 
     const off = ['فك البوت', 'افك البوت', 'فكيني', 'عطل البوت', 'طفي البوت', 'اوقف البوت', 'فك التفاعل', 'عطل التفاعل']
@@ -827,7 +823,7 @@ async function handleChannelToggle(message) {
     botcontrol.toggleChannel(message.guild.id, message.channel.id, on);
     await message.reply(on
         ? '✅ رجعت للتفاعل في هذا الروم.'
-        : '⛔ تم، فكيت نفسي من هذا الروم. لو تبي ترجعني بأي وقت كتب: **يا عبد شغل البوت**.').catch(() => {});
+        : '⛔ تم، فكيت نفسي من هذا الروم. لو تبي ترجعني بأي وقت كتب: **' + call.phrase() + ' شغل البوت**.').catch(() => {});
     return true;
 }
 
@@ -932,7 +928,7 @@ client.on('messageCreate', async (message) => {
     );
 
     // 🎙️ «يا عبد قول <نص>» → صوت العبد (ملف صوتي + يتكلمه بالروم الصوتي)
-    const sayOrder = content.replace(/^\s*(?:يا\s+)?(?:عبد|العبد)\s*/i, '').trim();
+    const sayOrder = call.strip(content);
     const sayHit = sayOrder.match(/^(?:قول|تكلم|انطق)\s+([\s\S]{2,900})$/);
     if (sayHit) {
         if (onCooldown(message.author.id, tts.get(message.guild.id).cooldownSec || 8)) return;
@@ -968,7 +964,7 @@ client.on('messageCreate', async (message) => {
         const ch = await comeToMe(message.member);
         return say(ch
             ? `🫡 أبشر يا طويل العمر، جيت عندك في **${ch.name}** 🎙️`
-            : '🫡 أبشر، دخلت الفويس المحدد 🎙️\n(ادخل روم صوتي وقل «يا عبد تعال» وأجيك عندك على طول)');
+            : '🫡 أبشر، دخلت الفويس المحدد 🎙️\n(ادخل روم صوتي وقل «' + call.phrase() + ' تعال» وأجيك عندك على طول)');
     }
     if (w('اطلع', 'اخرج')) {
         if (!canAdmin) return deny();

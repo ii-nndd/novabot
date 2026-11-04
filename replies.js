@@ -61,10 +61,12 @@ const isCustom = (k) => k.startsWith('custom.');
 module.exports = {
     defaults,
     // يرجع ردود المفتاح (المعدلة إن وجدت، وإلا الافتراضية)
+    // 🗣️ ونبدّل «يا عبد» باسم النداء المحدد من اللوحة (عشان نسخ بوتات ثانية)
     get(key) {
         const v = overrides[key];
-        if (Array.isArray(v) && (v.length || isCustom(key))) return v;
-        return defaults[key] || [];
+        const arr = (Array.isArray(v) && (v.length || isCustom(key))) ? v : (defaults[key] || []);
+        const ph = require('./call').phrase();
+        return ph === 'يا عبد' ? arr : arr.map(x => String(x).split('يا عبد').join(ph));
     },
     all() {
         const out = {};

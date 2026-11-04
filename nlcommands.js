@@ -1,5 +1,6 @@
 // أوامر الإدارة بالكلام الطبيعي: "يا عبد مسح 20" / "يا عبد طرد @فلان يسب الناس" / "يا عبد ميوت @فلان 10 دقايق مزعج"
 // يعيد استخدام منطق admin.js (run) ببناء "تفاعل وهمي" من رسالة عادية.
+const call = require('./call');
 
 const nz = (t) => t.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
 
@@ -59,9 +60,15 @@ function extractDuration(text) {
 
 // يشيل المنشنات وكلمة النداء والأمر والمدة من النص عشان يبقى السبب بس
 function extractReason(content, extras) {
-    let t = content
-        .replace(/<@!?\d+>/g, ' ').replace(/<@&\d+>/g, ' ').replace(/<#\d+>/g, ' ')
-        .replace(/يا\s*عبد/g, ' ').replace(/\bالعبد\b/g, ' ').replace(/\bعبد\b/g, ' ');
+    let t = String(content || '');
+    // نشيل اسم النداء الحالي (يا ايدا / يا عبد …) بكل صيغه
+    for (const n of call.names()) {
+        const nn = call.norm(n);
+        t = t.replace(new RegExp('يا\\s*' + nn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+        t = t.replace(new RegExp('\\b' + nn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'), ' ');
+    }
+    t = t
+        .replace(/<@!?\d+>/g, ' ').replace(/<@&\d+>/g, ' ').replace(/<#\d+>/g, ' ');
     for (const e of extras) if (e) t = t.split(e).join(' ');
     t = t.replace(/\s+/g, ' ').trim();
     return t || null;

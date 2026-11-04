@@ -28,6 +28,8 @@ const ai = require('./ai');
 const replies2 = require('./replies2');
 const cmdaccess = require('./cmdaccess');
 const fed = require('./federation');
+const callcfg = require('./call');
+const lovecfg = require('./love');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -55,7 +57,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-11-03.2';
+const BUILD = '2026-11-03.3';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -319,7 +321,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['tts','🎙️','صوت العبد'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['bots','🤖','البوتات','sup'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['presence','🎮','حالة البوت','super'],['hub','🎛️','لوحة التحكم'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود','rep'],['call','👋','النداء','access'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['love','💘','الحب','access'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['react','😍','الرياكشن'],['tts','🎙️','صوت العبد'],['ai','🤖','الذكاء الاصطناعي'],['*الإدارة والحماية'],['bots','🤖','البوتات','sup'],['guilds','🌐','السيرفرات','root'],['access','🔑','صلاحية الدخول','access'],['cmd','🔐','الأوامر','access'],['guard','🛡️','الحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 // هل يظهر هالبند؟ (حالة البوت والردود = 👑 لصاحب البوت فقط بسيرفرنا · صلاحية الدخول = لصاحب السيرفر/إدارة نوفا)
 function navOk(n,d){var k=n[3];if(!k)return true;if(k==='root')return !!d.isSuper&&d.public!==false;if(k==='sup')return !!d.isSuper;if(k==='super')return !!(d.nova&&d.isSuper);if(k==='rep')return d.nova?!!d.isSuper:true;if(k==='nova')return !!d.nova;if(k==='access')return !!(d.canManageAccess||d.isSuper);return true}
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
@@ -1007,6 +1009,72 @@ k.push(el('button',{class:'dn',text:'طرد',on:{click:function(){if(confirm('ت
 k.push(el('button',{class:'dn',text:'حظر',on:{click:function(){if(confirm('تأكيد حظر '+u.name+' ؟'))act('members/ban',{id:u.id,confirm:true},'تم الحظر')}}}));
 box.appendChild(el('div',{class:'item'},k))})}).catch(function(e){box.innerHTML='';box.appendChild(el('div',{class:'mut',text:e.message}))})}
 m.appendChild(card('',row([q,el('button',{class:'btn',text:'بحث',on:{click:load}})])));m.appendChild(box);load();return Promise.resolve()};
+// ===== 👋 النداء: البوت ما يرد إلا باسمه (يُضبط من هنا) =====
+pages.call=function(m){return api('call').then(function(d){
+ m.appendChild(el('h1',{text:'النداء'}));
+ m.appendChild(el('div',{class:'mut',text:'البوت ما يرد إلا لما تناديه بالاسم اللي هنا. الافتراضي «عبد» — لو تبي «ايدا» اكتبه واحفظ، ويصير يرد على «يا ايدا …» وما يرد على «يا عبد».'}));
+ var bareOn=d.bare!==false;
+ var nm=el('input',{value:d.name||'عبد',placeholder:'عبد',style:'flex:1;min-width:140px;text-align:center;font-weight:700;font-size:16px'});
+ var prev=el('div',{class:'mut',style:'font-size:13px',text:'مثال: '+d.phrase+' نكتة'});
+ nm.addEventListener('input',function(){prev.textContent='مثال: يا '+(nm.value||'…')+' نكتة'});
+ var tgl=sw(bareOn,function(v){bareOn=v});
+ m.appendChild(card('اسم النداء',el('div',{},[
+  el('div',{class:'mut',text:'الاسم الحالي: '+d.name+' — '+d.phrase}),
+  row([nm]),
+  prev,
+  row([el('div',{style:'flex:1;text-align:right'},[el('div',{class:'nm',text:'يرد على الاسم بدون «يا»'}),el('div',{class:'mut',style:'font-size:12px',text:'لو طفّيته يقبل «يا <الاسم>» بس — أنسب لو الاسم صار اسم شخص بالسيرفر.'})]),tgl]),
+  row([el('button',{class:'btn',text:'💾 حفظ',on:{click:function(){
+    go(api('call/save',{name:nm.value,bare:bareOn}),'انحفظ ✅','call')
+  }}}),el('button',{class:'b2',text:'🔄 رجوع لـ«عبد»',on:{click:function(){
+    go(api('call/reset',{}),'رجعنا الافتراضي ✅','call')
+  }}})])
+ ])));
+ m.appendChild(card('أمثلة',el('div',{},(d.examples||[]).map(function(x){return el('div',{class:'item'},[el('span',{class:'ic',text:'💬'}),el('div',{style:'flex:1;text-align:right'},[el('div',{class:'nm',text:x})])])}))));
+ m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;font-size:12px;line-height:1.9',text:'⚠️ الاسم إعداد عام للبوت كله (كل سيرفراته) — لأنه جزء من شخصية البوت. تغييره يطبَّق فوراً بلا إعادة تشغيل.'}));
+ return Promise.resolve()})};
+// ===== 💘 الحب: نسبة عشوائية تتغيّر (مو رقم ثابت) =====
+pages.love=function(m){return api('love').then(function(d){
+ m.appendChild(el('h1',{text:'الحب'}));
+ m.appendChild(el('div',{class:'mut',text:'أمر /حب يعطي نسبة توافق بين شخصين — عشوائية كل مرة، مو رقم محسوب من الآيديات ولا محفوظ لأحد. تقدر تحدد المدى، وتخليها ثابتة طول اليوم، وتضيف استثناءات لو تبي.'}));
+ var on=d.enabled!==false, rnd=d.random!==false, dly=!!d.daily;
+ var mn=el('input',{type:'number',value:d.min,min:'0',max:'100',style:'width:90px'});
+ var mx=el('input',{type:'number',value:d.max,min:'0',max:'100',style:'width:90px'});
+ m.appendChild(card('الإعدادات',el('div',{},[
+  row([el('div',{style:'flex:1;text-align:right'},[el('div',{class:'nm',text:'الأمر شغال'}),el('div',{class:'mut',style:'font-size:12px',text:'لو طفّيته: /حب يرد «مقفل».'})]),sw(on,function(v){on=v})]),
+  row([el('div',{style:'flex:1;text-align:right'},[el('div',{class:'nm',text:'نسبة عشوائية كل مرة'}),el('div',{class:'mut',style:'font-size:12px',text:'لو طفّيته: يرجع للحساب القديم الثابت من الآيديات.'})]),sw(rnd,function(v){rnd=v})]),
+  row([el('div',{style:'flex:1;text-align:right'},[el('div',{class:'nm',text:'نفس النسبة طول اليوم'}),el('div',{class:'mut',style:'font-size:12px',text:'ثابتة لنفس الشخصين لليوم كله، وتتغيّر بكرة — أنسب لو ما تحب الرقم يلعب كل سؤال.'})]),sw(dly,function(v){dly=v})]),
+  row([el('span',{class:'mut',text:'أدنى نسبة'}),mn,el('span',{class:'mut',text:'أعلى نسبة'}),mx]),
+  row([el('button',{class:'btn',text:'💾 حفظ',on:{click:function(){
+    go(api('love/save',{enabled:on,random:rnd,daily:dly,min:+mn.value,max:+mx.value,fixed:d.fixed||[]}),'انحفظ ✅','love')
+  }}}),el('button',{class:'b2',text:'🎲 جرّب نسبة',on:{click:function(){
+    api('love/roll',{}).then(function(r){toast('🎲 '+r.percent+'%')}).catch(function(e){toast(e.message,1)})
+  }}}),el('button',{class:'b2',text:'🔄 رجوع الافتراضي',on:{click:function(){go(api('love/reset',{}),'رجعنا الافتراضي ✅','love')}}})])
+ ])));
+ var fx=el('div',{});
+ var fixed=(d.fixed||[]).slice();
+ if(!fixed.length)fx.appendChild(el('div',{class:'mut',text:'ما فيه استثناءات — الكل عشوائي بالتساوي ✅'}));
+ fixed.forEach(function(o,i){
+  fx.appendChild(el('div',{class:'item'},[
+   el('span',{class:'ic',text:'💞'}),
+   el('div',{style:'flex:1;text-align:right'},[el('div',{class:'nm',text:o.a+' ❤️ '+o.b}),el('div',{class:'mut',style:'font-size:12px',text:'ثابتة '+o.pct+'%'})]),
+   el('button',{class:'dn',text:'🗑️',on:{click:function(){
+     fixed.splice(i,1);
+     go(api('love/save',{fixed:fixed}),'انشال ✅','love')
+   }}})
+  ]));
+ });
+ var a1=el('input',{placeholder:'آيدي الأول',style:'flex:1;min-width:150px'});
+ var a2=el('input',{placeholder:'آيدي الثاني',style:'flex:1;min-width:150px'});
+ var pc=el('input',{type:'number',value:'100',min:'0',max:'100',style:'width:80px'});
+ fx.appendChild(row([a1,a2,pc]));
+ fx.appendChild(row([el('button',{class:'b2',text:'➕ إضافة زوج بنسبة ثابتة',on:{click:function(){
+   if(!a1.value||!a2.value)return toast('اكتب الآيديين',1);
+   fixed.push({a:a1.value.trim(),b:a2.value.trim(),pct:+pc.value});
+   go(api('love/save',{fixed:fixed}),'انضاف ✅','love')
+ }}})]));
+ m.appendChild(card('استثناءات (اختياري)',el('div',{},[el('div',{class:'mut',text:'لو تبي شخصين معيّنين نسبتهم ثابتة دايماً — أضفهم هنا. فاضي = ما أحد مميّز، الكل عشوائي.'}),fx])));
+ m.appendChild(el('div',{class:'mut',style:'margin:10px 4px;font-size:12px;line-height:1.9',text:'النسبة تتغيّر كل ما كتب أحد /حب — ما تُحفظ ولا تنزل، وأي أحد يقدر يجرب أكثر من مرة.'}));
+ return Promise.resolve()})};
 pages.welcome=function(m){return api('welcome').then(function(d){var c=d.config;
 m.appendChild(el('h1',{text:'الترحيب'}));m.appendChild(el('div',{class:'mut',text:'المتغيرات: {user} المنشن، {name} الاسم، {server} اسم السيرفر، {count} رقم العضو'}));
 function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
@@ -3031,6 +3099,23 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         store.write('dashlog.json', l.slice(0, 300));
         res.json({ ok: true, id: gid, approved: on });
     }));
+
+    // ===== 👋 اسم النداء + 💘 الحب =====
+    api.get('/call', h(async () => {
+        const c = callcfg.get();
+        const p = 'يا ' + c.name;
+        return {
+            ...c, phrase: p,
+            examples: [p + ' نكتة', p + ' رتبتي', p + ' الألوان', p + ' شغل البوت', p + ' طرد @عضو يسب الناس', p + ' قول أهلاً بالجميع']
+        };
+    }));
+    api.post('/call/save', h(async (g, b) => ({ ok: true, ...callcfg.set({ name: b.name, bare: b.bare }) })));
+    api.post('/call/reset', h(async () => ({ ok: true, ...callcfg.reset() })));
+
+    api.get('/love', h(async () => lovecfg.get()));
+    api.post('/love/save', h(async (g, b) => ({ ok: true, ...lovecfg.set(b) })));
+    api.post('/love/reset', h(async () => ({ ok: true, ...lovecfg.reset() })));
+    api.post('/love/roll', h(async () => lovecfg.roll()));
 
     // ===== 🤝 البوتات: ربط بوتات ثانية بنفس اللوحة =====
     const supAny = (fn) => async (req, res) => {
